@@ -100,7 +100,8 @@ Now to figure out what to do with this to actually download some stuff!
 
 For the next step, i would like to add this stackoverflow comment that may offer insights in what to do now:
 
->> 
+```
+
 
     You have peers and a tracker. All peers together at any given moment are the swarm. The usual situation is one or a few peers has the complete fileset and wishes to make it available to other peers.
 
@@ -123,3 +124,5 @@ For the next step, i would like to add this stackoverflow comment that may offer
     A smaller piece size means the torrent is more robust since peers can trade pieces quicker, but it also means more hashes of pieces in the .torrent file have to be listed and therefore the .torrent file can be large.
 
     If you are publishing something via BitTorrent, it's best to seed the file as long as you wish to make it available. Other peers will be helping you, since most BitTorrent software implements algorithms that favor trying to spread things among as many peers as possible to maximize conncurrent connections. In this way BitTorrent can help you publish things and save bandwidth costs.
+
+```
