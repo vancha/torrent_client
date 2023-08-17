@@ -16,6 +16,9 @@ https://foss.coep.org.in/coepwiki/index.php/Bittorrent_Client
 
 https://docs.rs/reqwest/latest/reqwest/struct.Response.html#method.bytes
 
+I've extracted the data from the torrent file, and managed to send a request to the url inside, using the lava_torrent crate. 
+
+
 At this point i have received a respone from the announce tracker thingy, with the following data, indented here for readbility:
 
 ```
@@ -93,3 +96,4 @@ d
 	e
 e
 ```
+Now to figure out what to do with this to actually download some stuff!
