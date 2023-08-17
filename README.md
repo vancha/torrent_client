@@ -101,28 +101,36 @@ Now to figure out what to do with this to actually download some stuff!
 For the next step, i would like to add this stackoverflow comment that may offer insights in what to do now:
 
 ```
-
-
     You have peers and a tracker. All peers together at any given moment are the swarm. The usual situation is one or a few peers has the complete fileset and wishes to make it available to other peers.
+
 
     A peer acquires a .torrent file, which will have among other things A) the SHA-1 hash of the fileset, B) the URL of the tracker, and C) the number of pieces that the file is broken into, as well as an SHA-1 hash of every piece. The size of the pieces are determined by the torrent itself.
 
-    The peer then connects to the tracker using the URL specified in the torrent. The tracker responds with a list of peers. Trackers talk HTTP over port 80 or 443.
 
-    The peer then selects another peer, using the information from the tracker, and contacts it directly to set up an exchange session, attempting to get a piece. Note that exchange sessions are directly done by the peers and the tracker is NOT involved in the transfer. The tracker only provides information.
+The peer then connects to the tracker using the URL specified in the torrent. The tracker responds with a list of peers. Trackers talk HTTP over port 80 or 443.
 
-    Once the peer has a piece, it verifies it against the SHA-1 hash, and writes it to the file. It can then offer that piece when selecting another peer. Subsequent exchange sessions involve "trading" pieces. I believe peers will generally only give you the first piece if you have no other pieces.
 
-    The peer reconsults the tracker every so often to get an updated list of peers. The peer does not have to wait for one exchange to finish before starting another one if it has multiple pieces, so once the peer has a bunch of pieces the transfer can really speed up. This is why torrents start slow but gain speed quickly as the peer acquires pieces.
+The peer then selects another peer, using the information from the tracker, and contacts it directly to set up an exchange session, attempting to get a piece. Note that exchange sessions are directly done by the peers and the tracker is NOT involved in the transfer. The tracker only provides information.
 
-    When a peer has all the pieces, the entire file is verified against the fileset SHA-1 hash. Then, it becomes a seeder, and is now doing nothing but helping the fileset be more highly available. Peers that do not have all the pieces are leechers.
 
-    If a torrent has no seeds, it is dead, although if a complete copy of the file exists between all pieces held by all peers they will eventually trade to get a complete copy amongst themselves.
+Once the peer has a piece, it verifies it against the SHA-1 hash, and writes it to the file. It can then offer that piece when selecting another peer. Subsequent exchange sessions involve "trading" pieces. I believe peers will generally only give you the first piece if you have no other pieces.
 
-    The SHA-1 hash is how the tracker and peers "know" which file is supposed to be swarmed. Filenames in the torrent aren't used to identify the data. Pieces that don't verify against the hases in the .torrent file are thrown out. Peers that continually send bad pieces are snubbed by other peers and will eventually not be able to connect to anyone in the swarm.
 
-    A smaller piece size means the torrent is more robust since peers can trade pieces quicker, but it also means more hashes of pieces in the .torrent file have to be listed and therefore the .torrent file can be large.
+The peer reconsults the tracker every so often to get an updated list of peers. The peer does not have to wait for one exchange to finish before starting another one if it has multiple pieces, so once the peer has a bunch of pieces the transfer can really speed up. This is why torrents start slow but gain speed quickly as the peer acquires pieces.
 
-    If you are publishing something via BitTorrent, it's best to seed the file as long as you wish to make it available. Other peers will be helping you, since most BitTorrent software implements algorithms that favor trying to spread things among as many peers as possible to maximize conncurrent connections. In this way BitTorrent can help you publish things and save bandwidth costs.
+
+When a peer has all the pieces, the entire file is verified against the fileset SHA-1 hash. Then, it becomes a seeder, and is now doing nothing but helping the fileset be more highly available. Peers that do not have all the pieces are leechers.
+
+
+If a torrent has no seeds, it is dead, although if a complete copy of the file exists between all pieces held by all peers they will eventually trade to get a complete copy amongst themselves.
+
+
+The SHA-1 hash is how the tracker and peers "know" which file is supposed to be swarmed. Filenames in the torrent aren't used to identify the data. Pieces that don't verify against the hases in the .torrent file are thrown out. Peers that continually send bad pieces are snubbed by other peers and will eventually not be able to connect to anyone in the swarm.
+
+
+A smaller piece size means the torrent is more robust since peers can trade pieces quicker, but it also means more hashes of pieces in the .torrent file have to be listed and therefore the .torrent file can be large.
+
+
+If you are publishing something via BitTorrent, it's best to seed the file as long as you wish to make it available. Other peers will be helping you, since most BitTorrent software implements algorithms that favor trying to spread things among as many peers as possible to maximize conncurrent connections. In this way BitTorrent can help you publish things and save bandwidth costs.
 
 ```
