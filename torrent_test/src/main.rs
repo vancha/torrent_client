@@ -87,7 +87,7 @@ fn main() {
         match TcpStream::connect(peer.addr) {
             Ok(mut stream) => {
                 println!("Connected to server");
-                loop {
+                //loop {
                     //handshake: <pstrlen><pstr><reserved><info_hash><peer_id>
                     //for v1.0 of torrent protocol, pstrlen = 19 and pstr = BitTorrent protocol
                     let pstrlen = "19";
@@ -110,10 +110,29 @@ fn main() {
                         request.len()
                     );
                     stream.write(&request);
+                    loop {
                     let mut read_buffer = &mut [0; 128];
+                    
+                    //do this differnetly, *first* only read the first 4 bytes (which will contain
+                    //the message length)
+                    //only after that, read exactly that number of bytes
+                    //the first byte will then be the message type, one of the following:
+                   //      MsgChoke         messageID = 0
+    //MsgUnchoke       messageID = 1
+    //MsgInterested    messageID = 2
+    //MsgNotInterested messageID = 3
+    //MsgHave          messageID = 4
+    //MsgBitfield      messageID = 5
+    //MsgRequest       messageID = 6
+    //MsgPiece         messageID = 7
+    //MsgCancel        messageID = 8
+    //the rest the message will contain the  payload
+                    
                     println!(
                         "The tcpstream responded with: {}",
-                        stream.read(read_buffer).unwrap()
+                        stream.read(read_buffer).unwrap()//try and only get 4 bytes at first to
+                                                         //know how much to read later, as
+                                                         //described above
                     );
                     println!("contents of response: {:?}", read_buffer);
                     let their_info_hash = &read_buffer[28..48];
