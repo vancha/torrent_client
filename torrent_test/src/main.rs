@@ -1,15 +1,38 @@
 use lava_torrent::torrent::v1::Torrent;
 use lava_torrent::tracker::TrackerResponse;
-use std::collections::HashMap;
-use std::fs;
 use std::path::Path;
 use urlencoding::{encode, encode_binary};
 
 use std::net::TcpStream;
-
+use std::time::Duration;
 //for use with the tcpstream
 use std::io::Read;
 use std::io::Write;
+
+enum MessageType {
+    KEEPALIVE,
+    CHOKE,
+    UNCHOKE,
+    INTERESTED,
+    NOT_INTERESTED,
+    HAVE( Vec<u8>),//this vec will be 5 bytes in length
+    PIECE(i32,i32,Vec<u8>),
+    BITFIELD(Vec<u8>),
+    REQUEST(Vec<u8>),
+    PORT( i32),
+}
+
+
+
+
+impl MessageType {
+
+    //<length prefix><message ID><payload>
+    fn new(response: Vec<u8>) -> Self {
+        println!("creating message type ");
+        MessageType::KEEPALIVE
+    }
+}
 
 fn main() {
     /*
@@ -19,6 +42,8 @@ fn main() {
 
     let parsed_torrent = Torrent::read_from_file(torrent_location).unwrap();
 
+
+
     //here we have the announce url(s)
     let announce_url = parsed_torrent.announce.clone().unwrap();
 
@@ -27,7 +52,7 @@ fn main() {
     let urlencoded_info_hash = encode_binary(&info_hash);
     println!("info hash: {:?}", info_hash);
 
-    let peer_id = encode("thurmanmermadddddddn");
+    let peer_id = encode("thurmanmermanddddddd");
     let port = 6881;
     let uploaded = 0;
     let downloaded = 0;
@@ -84,7 +109,7 @@ fn main() {
     };
 
     for peer in peers {
-        match TcpStream::connect(peer.addr) {
+        match TcpStream::connect_timeout(&peer.addr, Duration::from_secs(5)) {
             Ok(mut stream) => {
                 println!("Connected to server");
                 //loop {
@@ -110,47 +135,91 @@ fn main() {
                         request.len()
                     );
                     stream.write(&request);
+
+                    println!("handshake sent");
+                    let mut handshake_buffer = [0u8; 68];
+                    stream.read_exact(&mut handshake_buffer);
+                    let their_info_hash = &handshake_buffer[28..48];
+                    if info_hash != their_info_hash {
+                        break;
+                    } else {
+                        println!("our infohashbrowns match, continuing conversation with peer.");
+                    }
+                    println!("handshake received");
+
+                    let mut is_interested = false;
+                    let mut is_choked = false;
+                    
                     loop {
-                    let mut read_buffer = &mut [0; 128];
-                    
-                    //do this differnetly, *first* only read the first 4 bytes (which will contain
-                    //the message length)
-                    //only after that, read exactly that number of bytes
-                    //the first byte will then be the message type, one of the following:
-                   //      MsgChoke         messageID = 0
-    //MsgUnchoke       messageID = 1
-    //MsgInterested    messageID = 2
-    //MsgNotInterested messageID = 3
-    //MsgHave          messageID = 4
-    //MsgBitfield      messageID = 5
-    //MsgRequest       messageID = 6
-    //MsgPiece         messageID = 7
-    //MsgCancel        messageID = 8
-    //the rest the message will contain the  payload
-                    
-                    println!(
-                        "The tcpstream responded with: {}",
-                        stream.read(read_buffer).unwrap()//try and only get 4 bytes at first to
-                                                         //know how much to read later, as
-                                                         //described above
-                    );
-                    println!("contents of response: {:?}", read_buffer);
 
+                        let mut size_buffer = [0u8; 4];
+                        stream.read_exact(&mut size_buffer);
+                        let message_size = i32::from_be_bytes(size_buffer);
+                        
+                        println!("size is {:?} ", size_buffer);
+                        if message_size > 0 {
+                            let mut payload_buffer =  vec![0u8; message_size as usize];
+                            stream.read_exact(&mut payload_buffer);
+                            //println!("payload is:  {:?}",payload_buffer);
 
-                        /*    example responses:
-                        contents of response: [0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
-The tcpstream responded with: 9
-contents of response: [0, 0, 0, 5, 4, 0, 0, 31, 67, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
-The tcpstream responded with: 9
-contents of response: [0, 0, 0, 5, 4, 0, 0, 58, 146, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+                            let message_type = payload_buffer[0];
 
-                        */
-                    let their_info_hash = &read_buffer[28..48];
+                            match message_type {
+                                0 => {//choke
+                                    println!("peer is choking us"); 
+                                },
+                                
+                                1 => {//unchoke
+                                      println!("peer is unchoking us");
+                                },
+                                2 => {//interested
+                                      println!("peer is interested");
+
+                                },
+                                3 => {//not interested
+                                      println!("peer is not interested");
+                                },
+                                4 => {//have
+                                      println!("peer sent have message");
+                                      println!("have is for piece with index {:?} out of {}",
+                                               &payload_buffer[1..5],
+                                               parsed_torrent.pieces.len());
+
+                                      //lets just request the piece this peer has
+                                      //this should be done by sendin a request message, before we
+                                      //do this though we need to have sent an interested message
+                                      //first, and additionally we must have received an unchoked
+                                      //message
+                                      //
+                                      //after all that, we can send a request that looks like:
+                                      //<4 byte length><1 byte msgid><4 byte piece index (0
+                                      //based)><4 byte sub-piece index><4 byte sub-piece length
+                                      //(probably 2^14>>
+                                },
+                                5 => {//bitfield
+                                      println!("peer sent bitfield");
+                                },
+                                6 => {//request
+                                    println!("peer sent request for block");
+                                },
+                                _ => {
+                                    println!("peer sent something else that i don't understand.");
+                                }
+                            }
+
+                        } else {
+                            println!("peer sent keepalive message, ignoring.");
+                        }
+                        
+                        
+                    //}
+                    //println!("contents of response: {:?}", read_buffer);
+                    //let their_info_hash = &read_buffer[28..48];
                     //make sure hashes match, so we know that this peer and us are talking about
                     //the same file
-                    if info_hash == their_info_hash {
-                        println!("our little info hashes match");
-                    }
+                    //if info_hash == their_info_hash {
+                    //    println!("our little info hashes match");
+                    //}
                     //break;
                 }
             }
@@ -166,4 +235,7 @@ contents of response: [0, 0, 0, 5, 4, 0, 0, 58, 146, 0, 0, 0, 0, 0, 0, 0, 0, 0, 
     /*
      *  download pieces
      */
+
+
+
 }
