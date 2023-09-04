@@ -149,13 +149,15 @@ fn main() {
 
                     let mut is_interested = false;
                     let mut is_choked = false;
-                    
+                    let mut peer_has:Vec<Vec<u8>> = vec![];
+                    let mut outstanding_request = false;
+
                     loop {
 
                         let mut size_buffer = [0u8; 4];
                         stream.read_exact(&mut size_buffer);
                         let message_size = i32::from_be_bytes(size_buffer);
-                        
+
                         println!("size is {:?} ", size_buffer);
                         if message_size > 0 {
                             let mut payload_buffer =  vec![0u8; message_size as usize];
@@ -166,17 +168,21 @@ fn main() {
 
                             match message_type {
                                 0 => {//choke
-                                    println!("peer is choking us"); 
+                                    is_choked = true;
+                                    println!("peer is choking us");
                                 },
-                                
+
                                 1 => {//unchoke
+                                      is_choked = false;
                                       println!("peer is unchoking us");
                                 },
                                 2 => {//interested
+                                      is_interested = true;
                                       println!("peer is interested");
 
                                 },
                                 3 => {//not interested
+                                      is_interested = false;
                                       println!("peer is not interested");
                                 },
                                 4 => {//have
@@ -184,7 +190,9 @@ fn main() {
                                       println!("have is for piece with index {:?} out of {}",
                                                &payload_buffer[1..5],
                                                parsed_torrent.pieces.len());
-
+                                     let bits:Vec<u8> = Vec::from(&payload_buffer[1..5]);
+                                      peer_has.push(bits.clone());
+                                      println!("just pushed: {:?}",&bits);
                                       //lets just request the piece this peer has
                                       //this should be done by sendin a request message, before we
                                       //do this though we need to have sent an interested message
@@ -196,7 +204,7 @@ fn main() {
                                       //based)><4 byte sub-piece index><4 byte sub-piece length
                                       //(probably 2^14>>
                                 },
-                                5 => {//bitfield
+                                5 => {//bitfieldpyt
                                       println!("peer sent bitfield");
                                 },
                                 6 => {//request
@@ -210,8 +218,21 @@ fn main() {
                         } else {
                             println!("peer sent keepalive message, ignoring.");
                         }
-                        
-                        
+                    
+                    if !outstanding_request && !is_choked {
+                        if (!peer_has.is_empty()){
+                            println!("the peer has pieces, and i can technically request those.");
+                            prinln!("");
+                            let request = [0,0,0,13,//size
+                                            6,//id
+                                            peer_has[0],peer_has[1],peer_has[2],peer_has[3],//idx
+                                            0,
+                                            
+                                            ];
+                        }
+                    } else {
+                        println!("already have an outstanding request with this peer.");
+                    }
                     //}
                     //println!("contents of response: {:?}", read_buffer);
                     //let their_info_hash = &read_buffer[28..48];
