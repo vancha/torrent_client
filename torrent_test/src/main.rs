@@ -49,6 +49,9 @@ fn main() {
 
     //here we have the info hash
     let info_hash = parsed_torrent.info_hash_bytes();
+    
+    //use this to compare with the python version that does the same, and see if it matches.
+    let lame_hash = parsed_torrent.info_hash();
     let urlencoded_info_hash = encode_binary(&info_hash);
     println!("info hash: {:?}", info_hash);
 
