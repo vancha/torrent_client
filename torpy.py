@@ -6,6 +6,7 @@ import struct
 #to turn int to 4 byte big endian: struct.pack('>I', your_int)
 
 import hashlib
+import urllib.parse
 
 class MessageType(Enum):
     KEEPALIVE       = -1,
@@ -63,31 +64,35 @@ class TorrentClient:
 
         #get torrent file handle
         metainfo_filehandle     = open(self.metainfo_file, "rb")
+        
         #read file as binary
         binary_data             = metainfo_filehandle.read()
+        
         #bdecode the thing
         decoded                 = bencodepy.decode(binary_data)
         info_value              = decoded[b'info']
+        total_size              = decoded[b'info'][b'length']
         bencoded_info           = bencodepy.encode(info_value)
         info_hashbrown          = hashlib.sha1(bencoded_info).hexdigest()
         info_hash               = bytes(info_hashbrown, 'utf-8')
         
-        #return important data
-        #to fix this function, make sure info_hash is urlencoded with urllib.parse.urlencode()
-        return  decoded[b'announce'], info_hash, decoded[b'port'] if b'port' in decoded.keys() else 6881
+        return  decoded[b'announce'], urllib.parse.quote(info_hash), decoded[b'port'] if b'port' in decoded.keys() else 6881, total_size
 
-    def request_tracker(self, announce_url, info_hash,peer_id,port,uploaded,downloaded,left):
+    def request_tracker(self, announce_url, info_hash,peer_id,port, size):#,uploaded,downloaded,left):
         #perform http get request
+        uploaded = 0
+        downloaded = 0
+        left = size
         #urlencode the info hash
-        request = f"{announce_url}?info_hash={info_hash.decode('utf-8')}&peer_id={peer_id}&port={port}&uploaded={uploaded}&downloaded={downloaded}&left={left}&event=started"
+        request = f"{announce_url.decode('utf-8')}?info_hash={info_hash}&peer_id={peer_id}&port={port}&uploaded={uploaded}&downloaded={downloaded}&left={left}&event=started"
         response = requests.get(request)
-        print('request: ',request.decode('utf-8'));
-        return resonse.content.decode('utf-8')
+        return response.content.decode('utf-8')
 
     def download(self):
-        announce_url, info_hash, port = self.bedecode_metainfo()
-        print('info hash: ',info_hash)
-
+        announce_url, info_hash, port, total_size = self.bedecode_metainfo()
+        tracker_response = self.request_tracker(announce_url, info_hash, port, "thurmanmermanddddddd", total_size)
+        print('tracker response: ',tracker_response)
+        #print('info hash: ',info_hash)
         #print(f'announce url: {announce_url}')
         #response = self.request_tracker(announce_url, info_hash, "thurmanmermanddddddd",port,0,0,0)
         #print('response: ',response)
