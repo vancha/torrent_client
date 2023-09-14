@@ -1,7 +1,7 @@
 from enum import Enum
 import requests
 import bencodepy
-
+import pickle
 import struct
 #to turn int to 4 byte big endian: struct.pack('>I', your_int)
 
@@ -36,16 +36,23 @@ class PeerMessage:
 
 class Peer:
 
-    def __init__(self):
+    def __init__(self, ip, port, peer_id):
 
         #all clients start out this way
-        am_choking      = True
-        am_interested   = False
-        peer_choking    = True
-        peer_interested = False
-    
-    def connect(self):
+        self.am_choking      = True
+        self.am_interested   = False
+        self.peer_choking    = True
+        self.peer_interested = False
+        
+        self.ip = ip
+        self.peer_id = peer_id
+        self.port = port
+
+    def send_handshake(self):
         pass
+
+    def connect(self):
+        self.send_handshake()
 
 class TorrentClient:
     '''
@@ -90,7 +97,22 @@ class TorrentClient:
     def download(self):
         announce_url, info_hash, port, total_size = self.bedecode_metainfo()
         tracker_response = self.request_tracker(announce_url, info_hash, "thurmanmermanddddddd", port, total_size)
-        print(f'tracker response: {tracker_response.content}')
+        torrent_peers = []
+
+        try:
+            torrent_peers = pickle.load(open("torrent_peers.pickle", 'rb'))
+            print('loaded peers from disk')
+        except: 
+            bdecoded_response = bencodepy.decode(tracker_response.content)
+            for peer in bdecoded_response[b'peers']:
+                torrent_peers.append([peer[b'ip'], peer[b'peer id'], peer[b'port']])
+            pickle.dump(torrent_peers, open('torrent_peers.pickle', 'wb'))
+            print('requested new peers from tracker')
+
+        print(f'peers: {torrent_peers}')
+        #print(f"interval: {bdecoded_response[b'interval']}")
+        #print(f"peers: {bdecoded_response[b'peers']}")
+
 
 
 t = TorrentClient(metainfo_file='./ubuntu.torrent', peer_id="thurmanmermanddddddd")
