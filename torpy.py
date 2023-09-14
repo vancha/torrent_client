@@ -73,30 +73,25 @@ class TorrentClient:
         info_value              = decoded[b'info']
         total_size              = decoded[b'info'][b'length']
         bencoded_info           = bencodepy.encode(info_value)
-        info_hashbrown          = hashlib.sha1(bencoded_info).hexdigest()
-        info_hash               = bytes(info_hashbrown, 'utf-8')
+        info_hashbrown          = hashlib.sha1(bencoded_info).digest()
+        info_hash               = urllib.parse.quote(info_hashbrown, safe='')#bytes(info_hashbrown, 'utf-8'), safe='')
         
-        return  decoded[b'announce'], urllib.parse.quote(info_hash), decoded[b'port'] if b'port' in decoded.keys() else 6881, total_size
+        return  decoded[b'announce'], info_hash, decoded[b'port'] if b'port' in decoded.keys() else 6881, total_size
 
-    def request_tracker(self, announce_url, info_hash,peer_id,port, size):#,uploaded,downloaded,left):
+    def request_tracker(self, announce_url, info_hash,peer_id,port, size):
         #perform http get request
         uploaded = 0
         downloaded = 0
         left = size
-        #urlencode the info hash
         request = f"{announce_url.decode('utf-8')}?info_hash={info_hash}&peer_id={peer_id}&port={port}&uploaded={uploaded}&downloaded={downloaded}&left={left}&event=started"
         response = requests.get(request)
-        return response.content.decode('utf-8')
+        return response
 
     def download(self):
         announce_url, info_hash, port, total_size = self.bedecode_metainfo()
-        tracker_response = self.request_tracker(announce_url, info_hash, port, "thurmanmermanddddddd", total_size)
-        print('tracker response: ',tracker_response)
-        #print('info hash: ',info_hash)
-        #print(f'announce url: {announce_url}')
-        #response = self.request_tracker(announce_url, info_hash, "thurmanmermanddddddd",port,0,0,0)
-        #print('response: ',response)
+        tracker_response = self.request_tracker(announce_url, info_hash, "thurmanmermanddddddd", port, total_size)
+        print(f'tracker response: {tracker_response.content}')
 
 
-t = TorrentClient(metainfo_file='/home/vancha/Documents/rust/torrent_test/ubuntu.torrent', peer_id="thurmanmermanddddddd")
+t = TorrentClient(metainfo_file='./ubuntu.torrent', peer_id="thurmanmermanddddddd")
 t.download()
