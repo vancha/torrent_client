@@ -39,8 +39,6 @@ class PeerMessage:
         self.payload        = payload
     
     def from_response(response):
-
-        #process response, return Message
         pass
 
 class Peer:
@@ -59,12 +57,11 @@ class Peer:
 
     def send_handshake(self):
         if self.hasattr('socket_connection'):
-            print('attempting to send handshake')
             #this should be the 68 byte long handshake
             self.socket_connection.sendall(b"handshake")
             #size of handshake for bittorrent protocol 1.0
             response = self.socket_connection.recv(68)
-            #print('handshake response: ',str(response))
+            print('handshake response: ',str(response))
         else:
             print('no connection, will not send handshake')
 
@@ -74,12 +71,10 @@ class Peer:
             self.socket_connection = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             self.socket_connection.connect((self.ip, self.port))
             #self.send_handshake()
-            #self.socket_connection.close()
             self.socket_connection.close()
-            print('succesfully opened and closed connection')
+            print(f'bruh {self.ip}:{self.port} this was so successful is unbelieve')
         except Exception as e:
-            print(f'could not connect to {self.ip}:{self.port}')
-            print(f"connection failed: {e}");
+            print(f'could not connect to {self.ip}:{self.port} because {e}')
 
 class TorrentClient:
     '''
