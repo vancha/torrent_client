@@ -43,7 +43,7 @@ class PeerMessage:
 
 class Peer:
 
-    def __init__(self, ip, port, peer_id):
+    def __init__(self, ip, port, peer_id,info_hash):
 
         #all clients start out this way
         self.am_choking      = True
@@ -51,14 +51,17 @@ class Peer:
         self.peer_choking    = True
         self.peer_interested = False
         
-        self.ip = ip
-        self.peer_id = peer_id
-        self.port = port
+        #ip and port required for socket connection with peer
+        self.ip             = ip
+        self.peer_id        = peer_id
+        self.port           = port
+        #required for handshake with peer
+        self.info_hash      = info_hash
 
     def send_handshake(self):
         if self.hasattr('socket_connection'):
             #this should be the 68 byte long handshake
-            self.socket_connection.sendall(b"handshake")
+            self.socket_connection.sendall(f"{pstrlen}{ipstr}{reserved}{info_hash}{peer_id}")
             #size of handshake for bittorrent protocol 1.0
             response = self.socket_connection.recv(68)
             print('handshake response: ',str(response))
@@ -127,7 +130,7 @@ class TorrentClient:
         except: 
             bdecoded_response = bencodepy.decode(tracker_response.content)
             for peer in bdecoded_response[b'peers']:
-                torrent_peers.append(Peer(peer[b'ip'].decode('utf-8'),peer[b'port'],peer[b'peer id']))#[peer[b'ip'], peer[b'peer id'], peer[b'port']])
+                torrent_peers.append(Peer(peer[b'ip'].decode('utf-8'),peer[b'port'],peer[b'peer id'], info_hash))#[peer[b'ip'], peer[b'peer id'], peer[b'port']])
             pickle.dump(torrent_peers, open('torrent_peers.pickle', 'wb'))
             print('requested new peers from tracker')
 
