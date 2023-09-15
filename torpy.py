@@ -12,6 +12,9 @@ import hashlib
 import urllib.parse
 #to connect to the individual peers
 import socket
+#to handle peer connection simultaneously
+import threading
+from time import sleep
 
 
 class MessageType(Enum):
@@ -55,10 +58,28 @@ class Peer:
         self.port = port
 
     def send_handshake(self):
-        pass
+        if self.hasattr('socket_connection'):
+            print('attempting to send handshake')
+            #this should be the 68 byte long handshake
+            self.socket_connection.sendall(b"handshake")
+            #size of handshake for bittorrent protocol 1.0
+            response = self.socket_connection.recv(68)
+            #print('handshake response: ',str(response))
+        else:
+            print('no connection, will not send handshake')
 
-    def connect(self):
-        self.send_handshake()
+
+    def start_connection(self):
+        try:
+            self.socket_connection = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            self.socket_connection.connect((self.ip, self.port))
+            #self.send_handshake()
+            #self.socket_connection.close()
+            self.socket_connection.close()
+            print('succesfully opened and closed connection')
+        except Exception as e:
+            print(f'could not connect to {self.ip}:{self.port}')
+            print(f"connection failed: {e}");
 
 class TorrentClient:
     '''
@@ -111,22 +132,36 @@ class TorrentClient:
         except: 
             bdecoded_response = bencodepy.decode(tracker_response.content)
             for peer in bdecoded_response[b'peers']:
-                torrent_peers.append(Peer(peer[b'ip'],peer[b'port'],peer[b'peer id']))#[peer[b'ip'], peer[b'peer id'], peer[b'port']])
+                torrent_peers.append(Peer(peer[b'ip'].decode('utf-8'),peer[b'port'],peer[b'peer id']))#[peer[b'ip'], peer[b'peer id'], peer[b'port']])
             pickle.dump(torrent_peers, open('torrent_peers.pickle', 'wb'))
             print('requested new peers from tracker')
 
         print(f'peers: {torrent_peers}')
-        '''
+        
+        #this is goign to be used to signal the threads to stop when required
+        stop_event = threading.Event()
+
+        #the function passed to every thread that handles peer connection
+        def peer_connection(peer, event):
+            peer.start_connection()
+ 
         #initial work to start multiple threads. After for loop, make sure every socket connection is done in it's own thread,
         # use `event = Event()` to ensure that threads can be stopped later.
+        thread_list = []
         for peer in torrent_peers:
-            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-                s.connect((peer.ip, peer.port))
-                s.sendall(b"Hello, world")
-                data = s.recv(1024)
+            thread_list.append(threading.Thread(target=peer_connection, args=(peer, stop_event)))
+
+        for thread in thread_list:
+            thread.start()
+
+        sleep(10)
+        
+        for thread in thread_list:
+            thread.join()
+        print('all threads joined')
         '''
         #print(f"interval: {bdecoded_response[b'interval']}")
-        #print(f"peers: {bdecoded_response[b'peers']}")
+        #print(f"peers: {bdecoded_response[b'peers']}")'''
 
 
 
