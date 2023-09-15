@@ -1,12 +1,18 @@
 from enum import Enum
 import requests
+#to decode the metainfo file, and decode tracker response
 import bencodepy
+#to save a list of peers to disk
 import pickle
+#to turn ints in to big endian bytes with struct.pack('>I', int)
 import struct
-#to turn int to 4 byte big endian: struct.pack('>I', your_int)
-
+#to calculate the info_hash
 import hashlib
+#to urlencode strings
 import urllib.parse
+#to connect to the individual peers
+import socket
+
 
 class MessageType(Enum):
     KEEPALIVE       = -1,
@@ -105,11 +111,20 @@ class TorrentClient:
         except: 
             bdecoded_response = bencodepy.decode(tracker_response.content)
             for peer in bdecoded_response[b'peers']:
-                torrent_peers.append([peer[b'ip'], peer[b'peer id'], peer[b'port']])
+                torrent_peers.append(Peer(peer[b'ip'],peer[b'port'],peer[b'peer id']))#[peer[b'ip'], peer[b'peer id'], peer[b'port']])
             pickle.dump(torrent_peers, open('torrent_peers.pickle', 'wb'))
             print('requested new peers from tracker')
 
         print(f'peers: {torrent_peers}')
+        '''
+        #initial work to start multiple threads. After for loop, make sure every socket connection is done in it's own thread,
+        # use `event = Event()` to ensure that threads can be stopped later.
+        for peer in torrent_peers:
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                s.connect((peer.ip, peer.port))
+                s.sendall(b"Hello, world")
+                data = s.recv(1024)
+        '''
         #print(f"interval: {bdecoded_response[b'interval']}")
         #print(f"peers: {bdecoded_response[b'peers']}")
 
