@@ -15,6 +15,7 @@ import socket
 #to handle peer connection simultaneously
 import threading
 from time import sleep
+import ipaddress
 
 
 class MessageType(Enum):
@@ -71,7 +72,10 @@ class Peer:
 
     def start_connection(self):
         try:
-            self.socket_connection = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            if ipaddress.ip_address(self.ip).version == 4:
+                self.socket_connection = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            else:
+                self.socket_connection = socket.socket(socket.AF_INET6, socket.SOCK_STREAM)
             self.socket_connection.connect((self.ip, self.port))
             #self.send_handshake()
             self.socket_connection.close()
