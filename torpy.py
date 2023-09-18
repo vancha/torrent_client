@@ -146,15 +146,20 @@ class Peer:
                 case MessageType.KEEPALIVE:
                     print('got keepalive, ignoring')
                 case MessageType.CHOKE:
+                    print('received choke')
                     self.peer_choking = True
                 case MessageType.UNCHOKE:
+                    print('received unchoke')
                     self.peer_choked = False
                 case MessageType.INTERESTED:
+                    print('received interested')
                     self.peer_interested = True
                 case MessageType.NOTINTERESTED:
+                    print('received notinterested')
                     self.peer_interested = False
                 case MessageType.HAVE:
-                    print('got have msg')
+                    piece_index = int.from_bytes(message.payload[1:], 'big')
+                    print('got have msg, index: ',piece_index)
                 case MessageType.BITFIELD:
                     print('got bitfield msg')
                 case MessageType.REQUEST:
