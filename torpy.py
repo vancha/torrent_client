@@ -20,6 +20,9 @@ import ipaddress
 #2 minutes is the default timeout time for a peer in a bittorrent connection
 BITTORRENT_TIMEOUT_SECONDS = 60 * 2
 
+#the peer id by which i present myself to other peers
+MY_PEER_ID = "thurmanmermanddddddd"
+
 class MessageType(Enum):
     KEEPALIVE       = -1,
     CHOKE           = 0,
@@ -285,26 +288,32 @@ class TorrentClient:
         info_hash               = urllib.parse.quote(info_hashbrown, safe='')
         hex_hash                = hashlib.sha1(bencoded_info).hexdigest()
         return  decoded[b'announce'], hex_hash, decoded[b'port'] if b'port' in decoded.keys() else 6881, total_size
-
+    
+    '''
+    gets the list of peers from the tracker/announce url
+    '''
     def request_tracker(self, announce_url, info_hash,peer_id,port, size):
-        #perform http get request
+
+        #Get peers through http GET request
         uploaded = 0
         downloaded = 0
         left = size
+
+        #build the url to which to send the request to, and add the required parameters
         request = f"{announce_url.decode('utf-8')}?info_hash={info_hash}&peer_id={peer_id}&port={port}&uploaded={uploaded}&downloaded={downloaded}&left={left}&event=started"
         response = requests.get(request)
         return response
 
     def download(self):
         announce_url, info_hash, port, total_size = self.bedecode_metainfo()
-        tracker_response = self.request_tracker(announce_url, urllib.parse.quote(bytearray.fromhex(info_hash)), "thurmanmermanddddddd", port, total_size)
         torrent_peers = []
 
         try:
-            raise ValueError('pls')
+            #raise ValueError('pls')
             torrent_peers = pickle.load(open("torrent_peers.pickle", 'rb'))
             print(f'loaded {len(torrent_peers)} peers from disk')
-        except: 
+        except:
+            tracker_response = self.request_tracker(announce_url, urllib.parse.quote(bytearray.fromhex(info_hash)), MY_PEER_ID, port, total_size)
             bdecoded_response = bencodepy.decode(tracker_response.content)
             for peer in bdecoded_response[b'peers']:
                 torrent_peers.append(Peer(peer[b'ip'].decode('utf-8'),peer[b'port'],b"thurmanmermanddddddd", info_hash))
@@ -339,5 +348,5 @@ class TorrentClient:
 
 
 
-t = TorrentClient(metainfo_file='./ubuntu.torrent', peer_id="thurmanmermanddddddd")
+t = TorrentClient(metainfo_file='./ubuntu.torrent', peer_id=MY_PEER_ID)
 t.download()
