@@ -34,14 +34,56 @@ class MessageType(Enum):
 class PeerMessage:
 
     def __init__(self,length_prefix, message_id,payload):
-
-        self.length_prefix  = lenght_prefix
+        
+        self.length_prefix  = length_prefix
         self.message_id     = message_id
-        self.payload        = payload
-    
-    def from_response(response):
-        pass
+        
+        if self.length_prefix == 0 or message_id == None:
+            self.message_type = MessageType.KEEPALIVE
+            return
 
+        self.payload        = payload
+
+        #if hasattr(self, 'message_id'):
+        match self.message_id:
+            case 0:
+                self.message_type = MessageType.CHOKE
+            case 1:
+                self.message_type = MessageType.UNCHOKE
+            case 2:
+                self.message_type = MessageType.INTERESTED
+            case 3:
+                self.message_type = MessageType.NOTINTERESTED
+            case 4:
+                self.message_type = MessageType.HAVE
+            case 5:
+                self.message_type = MessageType.BITFIELD
+            case 6:
+                self.message_type = MessageType.REQUEST
+            case 7:
+                self.message_type = MessageType.PIECE
+            case 8:
+                self.message_type = MessageType.CANCEL
+            case 9:
+                self.message_type = MessageType.PORT
+            case _:
+                print(f'unknown message type: {message_id}')
+
+    
+    def from_socket(socket):
+        response = socket.recv(4)
+        #prefix is a four byte big endian value
+        length_prefix = integer_big_endian = int.from_bytes(response[0:4], 'big')
+
+        if not length_prefix:
+            return PeerMessage(length_prefix = 0, message_id = None, payload = None)
+        else:
+            message_id = int.from_bytes(socket.recv(1), byteorder='big')
+            return PeerMessage(length_prefix = length_prefix, message_id = message_id, payload=response)
+        
+'''
+representation of remote peer
+'''
 class Peer:
 
     def __init__(self, ip, port, peer_id,info_hash):
@@ -58,49 +100,89 @@ class Peer:
         self.port           = port
         #required for handshake with peer
         self.info_hash      = info_hash
-
+    
+    '''
+        returns true for successful handshake, false if not
+    '''
     def send_handshake(self):
+        #components for building the handshake
         pstrlen     = b'\x13'
         pstr        = b'BitTorrent protocol'
         reserved    = b'\x00\x00\x00\x00\x00\x00\x00\x00'
         info_hash   = bytearray.fromhex(self.info_hash)
-
+        
+        #check for valid connection
         if hasattr(self, 'socket_connection'):
+            #build the handshake
             request = pstrlen + pstr + reserved + info_hash + self.peer_id
- 
+            #send the handshake to peer
             self.socket_connection.sendall(request)
-
+            #get the response
             response            = self.socket_connection.recv(68)
+            
+            #compare our handshake with theirs, as per the spec
             chars_before_hash   = len(pstrlen)+len(pstr)+len(reserved)
             hash_length         = len(info_hash)
 
             their_hash          = response [chars_before_hash : chars_before_hash + hash_length]
             our_hash            = request  [chars_before_hash : chars_before_hash + hash_length]
-            
+           
+            #if equal, we have a successful connection!
             if(their_hash == our_hash):
                 return True
-            else:
-                print('disconnect, our info hashes do not match')
-                return False
-        else:
-            print('no connection, will not send handshake')
-            return False
+            #if not, we just fall through to the "return false" part
 
+        #here we have either no socket_connection, or our hashes don't match
+        return False
+
+
+    def start_peer_communication(self):
+        while True:
+            message = PeerMessage.from_socket(self.socket_connection)
+            
+            match message.message_type:
+                case MessageType.KEEPALIVE:
+                    print('got keepalive, ignoring')
+                case MessageType.CHOKE:
+                    self.peer_choking = True
+                case MessageType.UNCHOKE:
+                    self.peer_choked = False
+                case MessageType.INTERESTED:
+                    self.peer_interested = True
+                case MessageType.NOTINTERESTED:
+                    self.peer_interested = False
+                case MessageType.HAVE:
+                    print('got have msg')
+                case MessageType.BITFIELD:
+                    print('got bitfield msg')
+                case MessageType.REQUEST:
+                    print('got request msg')
+                case MessageType.PIECE:
+                    print('got piece msg')
+                case MessageType.CANCEL:
+                    print('got cancel msg')
+                case MessageType.PORT:
+                    print('got port msg')
 
     def start_connection(self):
         try:
+            #connect through ipv6 or ipv4, depending on what the peer uses
             if ipaddress.ip_address(self.ip).version == 4:
                 self.socket_connection = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             else:
                 self.socket_connection = socket.socket(socket.AF_INET6, socket.SOCK_STREAM)
+
             self.socket_connection.connect((self.ip, self.port))
             successful_handshake = self.send_handshake()
+            
             if not successful_handshake:
-                self.socket_connection.close()
+                print('disconnecting from {self.ip} cause no successful handshake')
             else:
                 print('connected and successful handshake! starting communication with peer')
-                #get messages from peer
-                #send my own
+                self.start_peer_communication() 
+
+            self.socket_connection.close()
+
         except Exception as e:
             print(f'could not connect to {self.ip}:{self.port} because {e}')
 
@@ -150,6 +232,7 @@ class TorrentClient:
         torrent_peers = []
 
         try:
+            raise ValueError('pls')
             torrent_peers = pickle.load(open("torrent_peers.pickle", 'rb'))
             print('loaded peers from disk')
         except: 
