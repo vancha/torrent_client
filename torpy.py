@@ -137,12 +137,18 @@ class Peer:
         #here we have either no socket_connection, or our hashes don't match
         return False
 
+    '''
+    Basically just an infinite loop, that gets messages from peers, and sends them back
 
+    '''
     def start_peer_communication(self):
         while True:
             message = PeerMessage.from_socket(self.socket_connection)
             
             match message.message_type:
+                #to implement my own keepalive, set a timeout on the "recv()"
+                #send my own keepalive message after that timeout and start
+                #listening again
                 case MessageType.KEEPALIVE:
                     print('got keepalive, ignoring')
                 case MessageType.CHOKE:
@@ -163,7 +169,10 @@ class Peer:
                 case MessageType.BITFIELD:
                     print('got bitfield msg')
                 case MessageType.REQUEST:
-                    print('got request msg')
+                    index = ''
+                    begin = ''
+                    length = ''
+                    print(f'got request msg, for index: {index}')
                 case MessageType.PIECE:
                     print('got piece msg')
                 case MessageType.CANCEL:
@@ -258,17 +267,20 @@ class TorrentClient:
         def peer_connection(peer, event):
             peer.start_connection()
  
-        #initial work to start multiple threads. After for loop, make sure every socket connection is done in it's own thread,
         # use `event = Event()` to ensure that threads can be stopped later.
+
+        #create a thread for every peer in the torrent_list
         thread_list = []
         for peer in torrent_peers:
             thread_list.append(threading.Thread(target=peer_connection, args=(peer, stop_event)))
-
+        
+        #start all those threads
         for thread in thread_list:
             thread.start()
 
         sleep(10)
-        
+
+        #assume we are done, close all the thread
         for thread in thread_list:
             thread.join()
         print('all threads joined')
