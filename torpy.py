@@ -17,6 +17,8 @@ import threading
 from time import sleep
 import ipaddress
 
+#2 minutes is the default timeout time for a peer in a bittorrent connection
+BITTORRENT_TIMEOUT_SECONDS = 60 * 2
 
 class MessageType(Enum):
     KEEPALIVE       = -1,
@@ -99,18 +101,20 @@ class Peer:
         self.has_pieces         = []
         self.has_requested_piece= []
         self.completed_pieces   = []
+
         #ip and port required for socket connection with peer
         self.ip                 = ip
         self.peer_id            = peer_id
         self.port               = port
+
         #required for handshake with peer
         self.info_hash          = info_hash
-        self.keepalives         = 0
     
     '''
         returns true for successful handshake, false if not
     '''
     def send_handshake(self):
+
         #components for building the handshake
         pstrlen     = b'\x13'
         pstr        = b'BitTorrent protocol'
@@ -119,10 +123,13 @@ class Peer:
         
         #check for valid connection
         if hasattr(self, 'socket_connection'):
+
             #build the handshake
             request = pstrlen + pstr + reserved + info_hash + self.peer_id
+
             #send the handshake to peer
             self.socket_connection.sendall(request)
+
             #get the response
             response            = self.socket_connection.recv(68)
             
@@ -133,10 +140,9 @@ class Peer:
             their_hash          = response [chars_before_hash : chars_before_hash + hash_length]
             our_hash            = request  [chars_before_hash : chars_before_hash + hash_length]
            
-            #if equal, we have a successful connection!
+            #return true if hashes match, fall through to false if not
             if(their_hash == our_hash):
                 return True
-            #if not, we just fall through to the "return false" part
 
         #here we have either no socket_connection, or our hashes don't match
         return False
@@ -147,19 +153,17 @@ class Peer:
     '''
     def start_peer_communication(self):
         while True:
+
+            #get one message from the socket
             message = PeerMessage.from_socket(self.socket_connection)
             
+            #check what kind of message it is, and handle it appropriately
             match message.message_type:
                 #to implement my own keepalive, set a timeout on the "recv()"
                 #send my own keepalive message after that timeout and start
                 #listening again
                 case MessageType.KEEPALIVE:
                     pass
-                    #print('got keepalive, ignoring')
-                    
-                    #self.keepalives += 1
-                    #if self.keepalives > 20:
-                    #    exit('too many keepalives')
                 case MessageType.CHOKE:
                     print('received choke')
                     self.peer_choked = True
@@ -181,27 +185,27 @@ class Peer:
                 case MessageType.BITFIELD:
                     print('got bitfield msg')
                 case MessageType.REQUEST:
-                    index = ''
-                    begin = ''
-                    length = ''
-                    print(f'got request msg, for index: {index}')
+                    index = int.from_bytes(message.payload[0])
+                    begin = int.from_bytes(message.payload[1])
+                    length = int.from_bytes(message.payload[2])
+                    print(f'got request msg, for index: {index}, begin: {begin}, length: {length}')
                 case MessageType.PIECE:
-                    print('got piece msg')
-                    exit('we did it?')
+                    #index = int.from_bytes(message.payload[0])
+                    #begin = int.from_bytes(message.payload[1])
+                    #block = int.from_bytes(message.payload[2])
+                    
+                    print(f'got piece msg of size {message.length_prefix}')
                 case MessageType.CANCEL:
                     print('got cancel msg')
                 case MessageType.PORT:
                     print('got port msg')
 
-            #print('checking for choking and pieces')
 
             if not self.peer_choked and  self.has_pieces:
-                #print('not chocking and has pieces')
                 for piece in self.has_pieces:
-                    #print('checking piece ',piece)
                     if not piece in self.completed_pieces:
-                        print('requesting piece')
-                        self.send_request_message(piece, 0, 2^15)
+                        print(f'requesting piece {piece}')
+                        self.send_request_message(piece, 0, 2 ** 14)
                         self.completed_pieces.append(piece)
 
 
@@ -213,7 +217,8 @@ class Peer:
             exit('something wrong, sending unchoke message on a non-existing socket?')
 
     def send_request_message(self, index, begin, length):
-        request_message = struct.pack(">I", 13) + b'\x06' + struct.pack(">I",index) +struct.pack(">I",0)+ struct.pack(">I", 32768)
+        print(f'requesting piece of size {length}')
+        request_message = b'\x00\x00\x00\x0D' + b'\x06' + struct.pack(">I",index) +struct.pack(">I",0)+ struct.pack(">I", length)
         self.send_message(request_message)
 
     def send_unchoke_message(self):
@@ -232,7 +237,7 @@ class Peer:
                 self.socket_connection = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             else:
                 self.socket_connection = socket.socket(socket.AF_INET6, socket.SOCK_STREAM)
-
+            self.socket_connection.settimeout(BITTORRENT_TIMEOUT_SECONDS)
             self.socket_connection.connect((self.ip, self.port))
             successful_handshake = self.send_handshake()
             
