@@ -194,6 +194,7 @@ class Peer:
                     #begin = int.from_bytes(message.payload[1])
                     #block = int.from_bytes(message.payload[2])
                     
+                    #the length prefix seems to match my request perfectly, with the additional 9 bytes as per the protocol :)
                     print(f'got piece msg of size {message.length_prefix}')
                 case MessageType.CANCEL:
                     print('got cancel msg')
