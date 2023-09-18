@@ -60,12 +60,29 @@ class Peer:
         self.info_hash      = info_hash
 
     def send_handshake(self):
-        if self.hasattr('socket_connection'):
+        if hasattr(self, 'socket_connection'):
             #this should be the 68 byte long handshake
-            self.socket_connection.sendall(f"{pstrlen}{ipstr}{reserved}{info_hash}{peer_id}")
-            #size of handshake for bittorrent protocol 1.0
-            response = self.socket_connection.recv(68)
-            print('handshake response: ',str(response))
+
+            # The main header, note the lower "p" in protocol, that's important
+            req = b'\x13'
+            req += b'BitTorrent protocol'
+            # The optional bits, note that normally some of these are set by most clients
+            req += b'\x00\x00\x00\x00\x00\x00\x00\x00'
+            # The Infohash we're interested in.  Let python convert the human readable
+            # version to a byte array just to make it easier to read
+            req += bytearray.fromhex("5fff0e1c8ac414860310bcc1cb76ac28e960efbe")
+            # Our client ID.  Just a random blob of bytes, note that most clients
+            # use the first bytes of this to mark which client they are
+            req += bytearray.fromhex("5b76c604def8aa17e0b0304cf9ac9caab516c692")
+            '''
+            pstr = "\x13BitTorrent protocol\x00\x00\x00\x00\x00\x00\x00\x00"
+            handshake = bytes(f"{pstr}{self.info_hash}{self.peer_id}","utf-8")
+            print(f"{handshake.hex()} {len(handshake)} in total")
+            #self.socket_connection.sendall(handshake)'''
+            
+            #info hash starts at byte 
+            #response = self.socket_connection.recv(68)
+            #print(f'{response.hex()}<- theirs')
         else:
             print('no connection, will not send handshake')
 
@@ -77,7 +94,7 @@ class Peer:
             else:
                 self.socket_connection = socket.socket(socket.AF_INET6, socket.SOCK_STREAM)
             self.socket_connection.connect((self.ip, self.port))
-            #self.send_handshake()
+            self.send_handshake()
             self.socket_connection.close()
             print(f'bruh {self.ip}:{self.port} this was so successful is unbelieve')
         except Exception as e:
@@ -134,7 +151,8 @@ class TorrentClient:
         except: 
             bdecoded_response = bencodepy.decode(tracker_response.content)
             for peer in bdecoded_response[b'peers']:
-                torrent_peers.append(Peer(peer[b'ip'].decode('utf-8'),peer[b'port'],peer[b'peer id'], info_hash))#[peer[b'ip'], peer[b'peer id'], peer[b'port']])
+                torrent_peers.append(Peer(peer[b'ip'].decode('utf-8'),peer[b'port'],b"thurmanmermanddddddd", info_hash))
+                #torrent_peers.append(Peer(peer[b'ip'].decode('utf-8'),peer[b'port'],peer[b'peer id'], info_hash))#[peer[b'ip'], peer[b'peer id'], peer[b'port']])
             pickle.dump(torrent_peers, open('torrent_peers.pickle', 'wb'))
             print('requested new peers from tracker')
 
