@@ -213,7 +213,7 @@ class Peer:
 
     def send_request_message(self, index, begin, length):
         print('preparing to send request message')
-        request_message = struct.pack(">I", 13) + struct.pack(">I", 6) + struct.pack(">I",index) +struct.pack(">I",0)+ struct.pack(">I", 32768)
+        request_message = struct.pack(">I", 13) + b'\x06' + struct.pack(">I",index) +struct.pack(">I",0)+ struct.pack(">I", 32768)
         print(f'sending request message for id {index}, {request_message}')
         self.send_message(request_message)
 
