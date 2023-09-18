@@ -91,17 +91,20 @@ class Peer:
     def __init__(self, ip, port, peer_id,info_hash):
 
         #all clients start out this way
-        self.am_choking      = True
-        self.am_interested   = False
-        self.peer_choking    = True
-        self.peer_interested = False
-        
+        self.am_choking         = True
+        self.am_interested      = False
+        self.peer_choking       = True
+        self.peer_interested    = False
+        self.has_pieces         = []
+        self.has_requested_piece= []
+        self.completed_pieces   = []
         #ip and port required for socket connection with peer
-        self.ip             = ip
-        self.peer_id        = peer_id
-        self.port           = port
+        self.ip                 = ip
+        self.peer_id            = peer_id
+        self.port               = port
         #required for handshake with peer
-        self.info_hash      = info_hash
+        self.info_hash          = info_hash
+        self.keepalives         = 0
     
     '''
         returns true for successful handshake, false if not
@@ -150,12 +153,18 @@ class Peer:
                 #send my own keepalive message after that timeout and start
                 #listening again
                 case MessageType.KEEPALIVE:
-                    print('got keepalive, ignoring')
+                    pass
+                    #print('got keepalive, ignoring')
+                    
+                    #self.keepalives += 1
+                    #if self.keepalives > 20:
+                    #    exit('too many keepalives')
                 case MessageType.CHOKE:
                     print('received choke')
-                    self.peer_choking = True
+                    self.peer_choked = True
                 case MessageType.UNCHOKE:
                     print('received unchoke')
+                    #self.send_unchoke_message()
                     self.peer_choked = False
                 case MessageType.INTERESTED:
                     print('received interested')
@@ -165,6 +174,8 @@ class Peer:
                     self.peer_interested = False
                 case MessageType.HAVE:
                     piece_index = int.from_bytes(message.payload[1:], 'big')
+                    print(f'received index {message.payload[1:]}, {int.from_bytes(message.payload[1:])} as int, {struct.pack(">I", int.from_bytes(message.payload[1:]))} back to lil byte')
+                    self.has_pieces.append(piece_index)
                     print('got have msg, index: ',piece_index)
                 case MessageType.BITFIELD:
                     print('got bitfield msg')
@@ -175,10 +186,47 @@ class Peer:
                     print(f'got request msg, for index: {index}')
                 case MessageType.PIECE:
                     print('got piece msg')
+                    exit('we did it?')
                 case MessageType.CANCEL:
                     print('got cancel msg')
                 case MessageType.PORT:
                     print('got port msg')
+
+            #print('checking for choking and pieces')
+
+            if not self.peer_choked and  self.has_pieces:
+                #print('not chocking and has pieces')
+                for piece in self.has_pieces:
+                    #print('checking piece ',piece)
+                    if not piece in self.completed_pieces:
+                        print('requesting piece')
+                        self.send_request_message(piece, 0, 2^15)
+                        self.completed_pieces.append(piece)
+
+
+    def send_message(self, message):
+        print('sending message')
+        if hasattr(self, 'socket_connection'):
+            self.socket_connection.sendall(message)
+        else:
+            exit('something wrong, sending unchoke message on a non-existing socket?')
+
+    def send_request_message(self, index, begin, length):
+        print('preparing to send request message')
+        request_message = struct.pack(">I", 13) + struct.pack(">I", 6) + struct.pack(">I",index) +struct.pack(">I",0)+ struct.pack(">I", 32768)
+        print(f'sending request message for id {index}, {request_message}')
+        self.send_message(request_message)
+
+    def send_unchoke_message(self):
+        unchoke_message = b'\x00\x00\x00\x01\x01'
+        print('sending unchoke message')
+        self.send_message(unchoke_message)
+
+    def send_interested_message(self):
+        interested_message = b'\x00\x00\x00\x01\x02'
+        print('sending interested message')
+        self.send_message(interested_message)
+
 
     def start_connection(self):
         try:
@@ -195,6 +243,8 @@ class Peer:
                 print('disconnecting from {self.ip} cause no successful handshake')
             else:
                 print('connected and successful handshake! starting communication with peer')
+                self.send_interested_message()
+                self.send_unchoke_message()
                 self.start_peer_communication() 
 
             self.socket_connection.close()
@@ -250,15 +300,14 @@ class TorrentClient:
         try:
             raise ValueError('pls')
             torrent_peers = pickle.load(open("torrent_peers.pickle", 'rb'))
-            print('loaded peers from disk')
+            print(f'loaded {len(torrent_peers)} peers from disk')
         except: 
             bdecoded_response = bencodepy.decode(tracker_response.content)
             for peer in bdecoded_response[b'peers']:
                 torrent_peers.append(Peer(peer[b'ip'].decode('utf-8'),peer[b'port'],b"thurmanmermanddddddd", info_hash))
             pickle.dump(torrent_peers, open('torrent_peers.pickle', 'wb'))
-            print('requested new peers from tracker')
+            print(f'requested {len(torrent_peers)} new peers from tracker')
 
-        print(f'peers: {torrent_peers}')
         
         #this is goign to be used to signal the threads to stop when required
         stop_event = threading.Event()
