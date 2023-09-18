@@ -44,7 +44,6 @@ class PeerMessage:
 
         self.payload        = payload
 
-        #if hasattr(self, 'message_id'):
         match self.message_id:
             case 0:
                 self.message_type = MessageType.CHOKE
@@ -67,7 +66,8 @@ class PeerMessage:
             case 9:
                 self.message_type = MessageType.PORT
             case _:
-                print(f'unknown message type: {message_id}')
+                #error, exit!
+                exit(f'unknown message type: {message_id}')
 
     
     def from_socket(socket):
@@ -80,8 +80,9 @@ class PeerMessage:
         else:
             #add the rest of the message to the response
             payload = socket.recv(length_prefix)
+            #message id is single byte decimal value
             message_id = payload[0]
-            return PeerMessage(length_prefix = length_prefix, message_id = message_id, payload=payload)
+            return PeerMessage(length_prefix = length_prefix, message_id = message_id, payload=payload[1:])
         
 '''
 representation of remote peer
@@ -173,8 +174,8 @@ class Peer:
                     print('received notinterested')
                     self.peer_interested = False
                 case MessageType.HAVE:
-                    piece_index = int.from_bytes(message.payload[1:], 'big')
-                    print(f'received index {message.payload[1:]}, {int.from_bytes(message.payload[1:])} as int, {struct.pack(">I", int.from_bytes(message.payload[1:]))} back to lil byte')
+                    piece_index = int.from_bytes(message.payload, 'big')
+                    print(f'received index {message.payload}, {int.from_bytes(message.payload)} as int, {struct.pack(">I", int.from_bytes(message.payload))} back to lil byte')
                     self.has_pieces.append(piece_index)
                     print('got have msg, index: ',piece_index)
                 case MessageType.BITFIELD:
@@ -212,19 +213,15 @@ class Peer:
             exit('something wrong, sending unchoke message on a non-existing socket?')
 
     def send_request_message(self, index, begin, length):
-        print('preparing to send request message')
         request_message = struct.pack(">I", 13) + b'\x06' + struct.pack(">I",index) +struct.pack(">I",0)+ struct.pack(">I", 32768)
-        print(f'sending request message for id {index}, {request_message}')
         self.send_message(request_message)
 
     def send_unchoke_message(self):
         unchoke_message = b'\x00\x00\x00\x01\x01'
-        print('sending unchoke message')
         self.send_message(unchoke_message)
 
     def send_interested_message(self):
         interested_message = b'\x00\x00\x00\x01\x02'
-        print('sending interested message')
         self.send_message(interested_message)
 
 
