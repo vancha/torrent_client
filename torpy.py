@@ -73,13 +73,15 @@ class PeerMessage:
     def from_socket(socket):
         response = socket.recv(4)
         #prefix is a four byte big endian value
-        length_prefix = integer_big_endian = int.from_bytes(response[0:4], 'big')
+        length_prefix = int.from_bytes(response[0:4], 'big')
 
         if not length_prefix:
             return PeerMessage(length_prefix = 0, message_id = None, payload = None)
         else:
-            message_id = int.from_bytes(socket.recv(1), byteorder='big')
-            return PeerMessage(length_prefix = length_prefix, message_id = message_id, payload=response)
+            #add the rest of the message to the response
+            payload = socket.recv(length_prefix)
+            message_id = payload[0]
+            return PeerMessage(length_prefix = length_prefix, message_id = message_id, payload=payload)
         
 '''
 representation of remote peer
