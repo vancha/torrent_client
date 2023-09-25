@@ -16,12 +16,19 @@ import socket
 import threading
 from time import sleep
 import ipaddress
+#to calculate the total number of pieces
+import math
 
 #2 minutes is the default timeout time for a peer in a bittorrent connection
-BITTORRENT_TIMEOUT_SECONDS = 60 * 2
+BITTORRENT_TIMEOUT_SECONDS  = 60 * 2
 
 #the peer id by which i present myself to other peers
-MY_PEER_ID = "thurmanmermanddddddd"
+MY_PEER_ID                  = "thurmanmermanddddddd"
+
+#the size of the subpieces we request, when we know a peer has a piece we do not
+SUB_PIECE_SIZE              = 2 ** 14
+
+PIECE_LENGTH                = 0
 
 class MessageType(Enum):
     KEEPALIVE       = -1,
@@ -39,10 +46,10 @@ class MessageType(Enum):
 class PeerMessage:
 
     def __init__(self,length_prefix, message_id,payload):
-        
+
         self.length_prefix  = length_prefix
         self.message_id     = message_id
-        
+
         if self.length_prefix == 0 or message_id == None:
             self.message_type = MessageType.KEEPALIVE
             return
@@ -74,7 +81,7 @@ class PeerMessage:
                 #error, exit!
                 exit(f'unknown message type: {message_id}')
 
-    
+
     def from_socket(socket):
         response = socket.recv(4)
         #prefix is a four byte big endian value
@@ -88,7 +95,7 @@ class PeerMessage:
             #message id is single byte decimal value
             message_id = payload[0]
             return PeerMessage(length_prefix = length_prefix, message_id = message_id, payload=payload[1:])
-        
+
 '''
 representation of remote peer
 '''
@@ -112,7 +119,7 @@ class Peer:
 
         #required for handshake with peer
         self.info_hash          = info_hash
-    
+
     '''
         returns true for successful handshake, false if not
     '''
@@ -123,7 +130,7 @@ class Peer:
         pstr        = b'BitTorrent protocol'
         reserved    = b'\x00\x00\x00\x00\x00\x00\x00\x00'
         info_hash   = bytearray.fromhex(self.info_hash)
-        
+
         #check for valid connection
         if hasattr(self, 'socket_connection'):
 
@@ -135,14 +142,14 @@ class Peer:
 
             #get the response
             response            = self.socket_connection.recv(68)
-            
+
             #compare our handshake with theirs, as per the spec
             chars_before_hash   = len(pstrlen)+len(pstr)+len(reserved)
             hash_length         = len(info_hash)
 
             their_hash          = response [chars_before_hash : chars_before_hash + hash_length]
             our_hash            = request  [chars_before_hash : chars_before_hash + hash_length]
-           
+
             #return true if hashes match, fall through to false if not
             if(their_hash == our_hash):
                 return True
@@ -159,7 +166,7 @@ class Peer:
 
             #get one message from the socket
             message = PeerMessage.from_socket(self.socket_connection)
-            
+
             #check what kind of message it is, and handle it appropriately
             match message.message_type:
                 #to implement my own keepalive, set a timeout on the "recv()"
@@ -193,12 +200,31 @@ class Peer:
                     length = int.from_bytes(message.payload[2])
                     print(f'got request msg, for index: {index}, begin: {begin}, length: {length}')
                 case MessageType.PIECE:
+                    print('GETTING PIECE')
+                    print(f'payload: {message.payload[0:13]}')
+                    print(f'index: {int.from_bytes(message.payload[0:4])}')
+                    print(f'begin: {int.from_bytes(message.payload[4:8])}')
+                    print(f'length: {message.length_prefix - 9}')
+                    #piece_index = message.payload[0:4]
+                    start_index = message.payload[1]
+                    block = message.payload[2:]
+                    #print(f'receiving piece index {piece_index}, starting at {start_index} and ending at {start_index + PIECE_LENGTH} ')
+                    #print(f'looks like: {block}')
                     #index = int.from_bytes(message.payload[0])
                     #begin = int.from_bytes(message.payload[1])
-                    #block = int.from_bytes(message.payload[2])
-                    
+                    #block = int.from_bytes(message.payload[2:])
+
+                    #if we don't have this piece, request it completely
+                    #262144 is the piece size, we ask for 2 ** 14 bytes per request
+                    #that makes 16 total requests before we have the whole piece
+                    #for i in range(0, math.ceil( PIECE_LENGTH / SUB_PIECE_SIZE)):
+                    #    self.send_request_message(i, i * SUB_PIECE_SIZE, SUB_PIECE_SIZE)
+
                     #the length prefix seems to match my request perfectly, with the additional 9 bytes as per the protocol :)
-                    print(f'got piece msg of size {message.length_prefix}')
+                    #print(f'got piece msg of size {message.length_prefix}, which is {SUB_PIECE_SIZE - 13}')
+                    #print(f'index of this piece is {index}')
+                    #print(f'it starts at {begin}')
+                    #print(f'and looks like {block}')
                 case MessageType.CANCEL:
                     print('got cancel msg')
                 case MessageType.PORT:
@@ -209,7 +235,12 @@ class Peer:
                 for piece in self.has_pieces:
                     if not piece in self.completed_pieces:
                         print(f'requesting piece {piece}')
-                        self.send_request_message(piece, 0, 2 ** 14)
+                        for i in range(0, math.ceil( PIECE_LENGTH / SUB_PIECE_SIZE)):
+                            print(f'requesting part {i} out of {math.ceil( PIECE_LENGTH / SUB_PIECE_SIZE)}')
+                            print(f'starting at {i * SUB_PIECE_SIZE}')
+                            self.send_request_message(piece, i * SUB_PIECE_SIZE, SUB_PIECE_SIZE)
+                            sleep(.1)
+                        #self.send_request_message(piece, 0, 2 ** 14)
                         self.completed_pieces.append(piece)
 
 
@@ -220,9 +251,10 @@ class Peer:
         else:
             exit('something wrong, sending unchoke message on a non-existing socket?')
 
+    #index is the piece index, not the subpiece index
     def send_request_message(self, index, begin, length):
         print(f'requesting piece of size {length}')
-        request_message = b'\x00\x00\x00\x0D' + b'\x06' + struct.pack(">I",index) +struct.pack(">I",0)+ struct.pack(">I", length)
+        request_message = b'\x00\x00\x00\x0D\x06' + struct.pack(">I",index) +struct.pack(">I",begin)+ struct.pack(">I", length)
         self.send_message(request_message)
 
     def send_unchoke_message(self):
@@ -244,7 +276,7 @@ class Peer:
             self.socket_connection.settimeout(BITTORRENT_TIMEOUT_SECONDS)
             self.socket_connection.connect((self.ip, self.port))
             successful_handshake = self.send_handshake()
-            
+
             if not successful_handshake:
                 print('disconnecting from {self.ip} cause no successful handshake')
             else:
@@ -266,7 +298,7 @@ class TorrentClient:
 
         self.metainfo_file  = metainfo_file
         self.peer_id        = peer_id
-    
+
     '''
         decodes the metainfo(torrent) file, returns: announce_url, info_hash, port
         info_hash is a urlencoded 20-byte SHA1 hash of the value of the info key from the Metainfo file.
@@ -275,10 +307,10 @@ class TorrentClient:
 
         #get torrent file handle
         metainfo_filehandle     = open(self.metainfo_file, "rb")
-        
+
         #read file as binary
         binary_data             = metainfo_filehandle.read()
-        
+
         #bdecode the thing
         decoded                 = bencodepy.decode(binary_data)
         info_value              = decoded[b'info']
@@ -287,8 +319,24 @@ class TorrentClient:
         info_hashbrown          = hashlib.sha1(bencoded_info).digest()
         info_hash               = urllib.parse.quote(info_hashbrown, safe='')
         hex_hash                = hashlib.sha1(bencoded_info).hexdigest()
+        global PIECE_LENGTH
+        PIECE_LENGTH            = decoded[b'info'][b'piece length']
+
+        total_pieces            = math.ceil(total_size / PIECE_LENGTH)
+        #total pieces should equal the length of decoded[b'info'][b'pieces'] / 20, cause
+        #all those hashes are 20 bytes each
+        print(f"info keys: {decoded[b'info'].keys()}")
+        print(f"root keys: {decoded.keys()}")
+        print(f"total length: {decoded[b'info'][b'length']}")
+
+        print(f"num pieces: {len(decoded[b'info'][b'pieces']) // 20}")
+
+
+        print(f"piece length: {PIECE_LENGTH}")
+        print(f"total pieces: {total_pieces}")
+
         return  decoded[b'announce'], hex_hash, decoded[b'port'] if b'port' in decoded.keys() else 6881, total_size
-    
+
     '''
     gets the list of peers from the tracker/announce url
     '''
@@ -304,8 +352,13 @@ class TorrentClient:
         response = requests.get(request)
         return response
 
+    '''
+    start downloading
+    '''
     def download(self):
         announce_url, info_hash, port, total_size = self.bedecode_metainfo()
+
+        #exit('making an exit')
         torrent_peers = []
 
         try:
@@ -320,7 +373,7 @@ class TorrentClient:
             pickle.dump(torrent_peers, open('torrent_peers.pickle', 'wb'))
             print(f'requested {len(torrent_peers)} new peers from tracker')
 
-        
+
         #this is goign to be used to signal the threads to stop when required
         stop_event = threading.Event()
 
@@ -334,18 +387,17 @@ class TorrentClient:
         thread_list = []
         for peer in torrent_peers:
             thread_list.append(threading.Thread(target=peer_connection, args=(peer, stop_event)))
-        
+
         #start all those threads
         for thread in thread_list:
             thread.start()
 
-        sleep(10)
-
+        #sleep(10)
+        x = input('just waiting for you to type something')
         #assume we are done, close all the thread
         for thread in thread_list:
             thread.join()
         print('all threads joined')
-
 
 
 t = TorrentClient(metainfo_file='./ubuntu.torrent', peer_id=MY_PEER_ID)
