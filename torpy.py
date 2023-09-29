@@ -102,15 +102,15 @@ representation of remote peer
 class Peer:
 
     def __init__(self, ip, port, peer_id,info_hash):
-
+        print('peer made with init!')
         #all clients start out this way
         self.am_choking         = True
         self.am_interested      = False
         self.peer_choking       = True
         self.peer_interested    = False
         self.has_pieces         = []
-        self.has_requested_piece= []
         self.completed_pieces   = []
+        self.requested_pieces   = {}
 
         #ip and port required for socket connection with peer
         self.ip                 = ip
@@ -189,25 +189,31 @@ class Peer:
                     self.peer_interested = False
                 case MessageType.HAVE:
                     piece_index = int.from_bytes(message.payload, 'big')
-                    print(f'received index {message.payload}, {int.from_bytes(message.payload)} as int, {struct.pack(">I", int.from_bytes(message.payload))} back to lil byte')
+                    print(f'received have for {piece_index}')
                     self.has_pieces.append(piece_index)
-                    print('got have msg, index: ',piece_index)
                 case MessageType.BITFIELD:
-                    print('got bitfield msg')
+                    print('got bitfield msg, wtf do i do?')
                 case MessageType.REQUEST:
                     index = int.from_bytes(message.payload[0])
                     begin = int.from_bytes(message.payload[1])
                     length = int.from_bytes(message.payload[2])
                     print(f'got request msg, for index: {index}, begin: {begin}, length: {length}')
                 case MessageType.PIECE:
+                    piece_index             = int.from_bytes(message.payload[0:4])
+                    subpiece_start_index    = int.from_bytes(message.payload[4:8])
+                    subpiece_index          = subpiece_start_index // SUB_PIECE_SIZE
+                    length                  = int.from_bytes(message.payload[8:12])
+                    block                   = message.payload[13:]
                     print('GETTING PIECE')
-                    print(f'payload: {message.payload[0:13]}')
-                    print(f'index: {int.from_bytes(message.payload[0:4])}')
-                    print(f'begin: {int.from_bytes(message.payload[4:8])}')
-                    print(f'length: {message.length_prefix - 9}')
+                    print(f'payload: {block}')
+                    print(f'index: {piece_index}')
+                    print(f'begin: {subpiece_start_index}')
+                    print(f'length: {length}')
+                    print(f'this piece is at index {subpiece_index}')
                     #piece_index = message.payload[0:4]
-                    start_index = message.payload[1]
-                    block = message.payload[2:]
+                    #start_index = message.payload[1]
+                    #block = message.payload[2:]
+
                     #print(f'receiving piece index {piece_index}, starting at {start_index} and ending at {start_index + PIECE_LENGTH} ')
                     #print(f'looks like: {block}')
                     #index = int.from_bytes(message.payload[0])
@@ -230,18 +236,17 @@ class Peer:
                 case MessageType.PORT:
                     print('got port msg')
 
-
+            print(f'Peer object has the following properties: {vars(self)}')
             if not self.peer_choked and  self.has_pieces:
                 for piece in self.has_pieces:
-                    if not piece in self.completed_pieces:
-                        print(f'requesting piece {piece}')
-                        for i in range(0, math.ceil( PIECE_LENGTH / SUB_PIECE_SIZE)):
-                            print(f'requesting part {i} out of {math.ceil( PIECE_LENGTH / SUB_PIECE_SIZE)}')
-                            print(f'starting at {i * SUB_PIECE_SIZE}')
+                    if piece not in self.completed_pieces and piece not in self.requested_pieces:
+                        print(f'requesting piece {piece} (not in {self.requested_pieces.keys()})')
+                        num_subpieces = math.ceil(PIECE_LENGTH / SUB_PIECE_SIZE)
+                        self.requested_pieces[piece] = [None for _ in range(num_subpieces)]
+                        for i in range(0, num_subpieces):
                             self.send_request_message(piece, i * SUB_PIECE_SIZE, SUB_PIECE_SIZE)
+                            print(f'self.requested_pieces[{piece}][{i % SUB_PIECE_SIZE}] = None')
                             sleep(.1)
-                        #self.send_request_message(piece, 0, 2 ** 14)
-                        self.completed_pieces.append(piece)
 
 
     def send_message(self, message):
@@ -392,7 +397,7 @@ class TorrentClient:
         for thread in thread_list:
             thread.start()
 
-        #sleep(10)
+        sleep(240)
         x = input('just waiting for you to type something')
         #assume we are done, close all the thread
         for thread in thread_list:
