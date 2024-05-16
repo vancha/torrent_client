@@ -20,7 +20,6 @@ class bdecoder:
         for _ in range(int(''.join(length))):
             value = value + chr(byte_iterator.peek())
             next(byte_iterator)
-        print(f'decoded string: {value}')
         return value
 
 
@@ -30,10 +29,8 @@ class bdecoder:
         values = ''
          
         while not chr(byte_iterator.peek()) == 'e':#.isnumeric():
-            val = chr(next(byte_iterator))
-            print(f'adding {val} to int')
-            values = values + val
-        print(f'done parsing int')
+            values = ''.join([values, chr(next(byte_iterator))])
+        
         #skip over the 'e'
         next(byte_iterator)
         return int(values)
@@ -47,25 +44,17 @@ class bdecoder:
             result.append(self.decode_next(byte_iterator))
         #skip over the 'e'
         next(byte_iterator)
-        print(f'decoded list: {result}')
         return result
 
     def decode_next(self, byte_iterator):
-        print(f'in decode_next')
         val = chr(byte_iterator.peek())
         if val == 'd':
-            dct =  self.decode_dict(byte_iterator)
-            print('decoding dict because val is {val}')
+            return self.decode_dict(byte_iterator)
         elif val == 'l':
-            lst = self.decode_list(byte_iterator)
-            print(f'decoded list: {lst}')
-            return lst
+            return self.decode_list(byte_iterator)
         elif val == 'i':
-            integer = self.decode_integer(byte_iterator)
-            print(f'decoded int:{integer}')
-            return integer
+            return self.decode_integer(byte_iterator)
         else:
-            print(f'decoding byte string because val is {val}')
             return self.decode_byte_string(byte_iterator)
 
     def decode_dict(self, byte_iterator):
@@ -74,9 +63,7 @@ class bdecoder:
         result  = {}
         while not chr(byte_iterator.peek()) == "e":
             field_name =  self.decode_byte_string(byte_iterator)
-            print(f'field name: {field_name}')
             field_value = self.decode_next(byte_iterator)
-            print(f'field value: {field_value}')
             result[field_name] = field_value
         #skip over the 'e'
         next(byte_iterator)
