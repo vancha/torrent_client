@@ -16,6 +16,7 @@ class bdecoder:
                 next(byte_iterator)
                 break
         value = ""
+
         for _ in range(int(''.join(length))):
             value = value + chr(byte_iterator.peek())
             next(byte_iterator)
@@ -24,45 +25,60 @@ class bdecoder:
 
 
     def decode_integer(self, byte_iterator):
-        pass
+        #skip over the 'i'
+        next(byte_iterator)
+        values = ''
+         
+        while chr(byte_iterator.peek()).isnumeric():
+            val = chr(byte_iterator.next())
+            print(f'adding {val} to int')
+            values = values + val
+        print(f'done parsing int')
+        #skip over the 'e'
+        next(byte_iterator)
+        return int(values)
+        
 
     def decode_list(self, byte_iterator):
-        result = []
-        val = chr(byte_iterator.peek())
-        while not val == 'e':
-            result.append(self.decode_next(byte_iterator))
+        #skip over the 'l'
         next(byte_iterator)
+        result = []
+        while not chr(byte_iterator.peek()) == 'e':
+            result.append(self.decode_next(byte_iterator))
+        #skip over the 'e'
+        next(byte_iterator)
+        print(f'decoded list: {result}')
         return result
 
     def decode_next(self, byte_iterator):
+        print(f'in decode_next')
         val = chr(byte_iterator.peek())
         if val == 'd':
-            next(byte_iterator)
+            dct =  self.decode_dict(byte_iterator)
             print('decoding dict because val is {val}')
-            return self.decode_dict(byte_iterator)
         elif val == 'l':
-            #pass by the initial l
-            next(byte_iterator)
-            print(f'decoding list because val is {val}')
-            return self.decode_list(byte_iterator)
+            lst = self.decode_list(byte_iterator)
+            print(f'decoded list: {lst}')
+            return lst
         elif val == 'i':
-            print(f'decoding int because val is {val}')
-            return self.decode_integer(byte_iterator)
+            integer = self.decode_integer(byte_iterator)
+            print(f'decoded int:{integer}')
+            return integer
         else:
             print(f'decoding byte string because val is {val}')
             return self.decode_byte_string(byte_iterator)
 
     def decode_dict(self, byte_iterator):
+        #skip over the 'd'
+        next(byte_iterator)
         result  = {}
-        print('attempting to decode dict')
-        val = chr(byte_iterator.peek())
-
-        while not val == "e":
+        while not chr(byte_iterator.peek()) == "e":
             field_name =  self.decode_byte_string(byte_iterator)
             print(f'field name: {field_name}')
             field_value = self.decode_next(byte_iterator)
             print(f'field value: {field_value}')
             result[field_name] = field_value
+        #skip over the 'e'
         next(byte_iterator)
         return result
 
@@ -74,26 +90,7 @@ class bdecoder:
         try:
             while True:
                 results.append(self.decode_next(byte_iterator))
-                '''
-                #dictionary
-                if chr(byte_iterator.peek()) == 'd':
-                    #skip the 'd'
-                    next(byte_iterator)
-                    results.append(self.decode_dict(byte_iterator))
-                    print(f"result: {results}")
-                    break
-                #integer
-                elif chr(byte_iterator.peek()) == 'i':
-                    results.append(self.decode_integer(byte_iterator))
-                #list
-                elif chr(byte_iterator.peek()) == 'l':
-                    results.append(self.decode_list(byte_iterator))
-                #bytestring
-                else:
-                    results.append(self.decode_byte_string(byte_iterator))
-                break
-                '''
-        except:
+        except StopIteration:
             print('reached end of file')
             return results
 
