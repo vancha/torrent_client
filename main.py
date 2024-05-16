@@ -72,7 +72,7 @@ class bdecoder:
         byte_iterator  = peekable(file)
         results = []
         return self.decode_next(byte_iterator)
-    
+
 x = bdecoder()
 
 decoded_dict = x.decode("./ubuntu.torrent")
