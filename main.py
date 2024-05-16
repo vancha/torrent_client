@@ -29,8 +29,8 @@ class bdecoder:
         next(byte_iterator)
         values = ''
          
-        while chr(byte_iterator.peek()).isnumeric():
-            val = chr(byte_iterator.next())
+        while not chr(byte_iterator.peek()) == 'e':#.isnumeric():
+            val = chr(next(byte_iterator))
             print(f'adding {val} to int')
             values = values + val
         print(f'done parsing int')
