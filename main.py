@@ -8,15 +8,21 @@ import  hashlib
 from    urllib          import request
 #to perform urlencoding on for example the info_hash
 from    urllib.parse    import quote
+import pprint
+
+
 PEER_ID = "thurmanmermanddddddd"
 
 #Decode metainfo file
-mif = MetaInfoFile( "./ubuntu.torrent" )
+mif = MetaInfoFile( "./ubun.torrent" )
 #set up tracker using valuers from decoded metainfo file
 tracker = Tracker( mif, PEER_ID )
 #send the http "GET" request to the tracker to get list of peers
+
+
+
 peers = tracker.get_peers()
-print(bdecoder.decode(peers))
-print(f'peers: {peers}')
+print(pprint.pprint(bdecoder.decode(peers)))
+#print(f'peers: {peers}')
 
 

@@ -10,7 +10,11 @@ class MetaInfoFile:
     #number of bytes in each piece, as integer
     def get_piece_length(self):
         return self.meta_info_dict[b"pieces"]
-    
+
+    def get_total_bytes(self):
+        #@todo: this will crash for multiple file mode torrents
+        return self.meta_info_dict[b"info"][b"length"]
+
     def get_announce_url(self):
         return self.meta_info_dict[b"announce"].decode('utf-8')
 
