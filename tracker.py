@@ -16,12 +16,9 @@ class Tracker:
         if event:
             url = f"{self.announce_url}?info_hash={self.urlencoded_info_hash}&peer_id={self.peer_id}&port={self.port}&uploaded={uploaded}&downloaded={downloaded}&left={left}&event={event}"
         else:
-            url = f"{self.announce_url}?info_hash={self.urlencoded_info_hash}&peer_id={self.peer_id}&port={self.port}&uploaded={uploaded}&downloaded={downloaded}&left={left}&compact={compact}&no_peer_id={no_peer_id}"
-        print(f'url: {url}')
+            url = f"{self.announce_url}?info_hash={self.urlencoded_info_hash}&peer_id={self.peer_id}&port={self.port}&uploaded={uploaded}&downloaded={downloaded}&left={left}"
         response = requests.get(url)
         if response.status_code != 200:
-            print(f'status code: {response.status_code}')
             return -1
         else:
             return response.content
-        #print(f'reponse content is {response.content}')
