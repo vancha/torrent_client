@@ -39,13 +39,12 @@ for peer in peers:
     if is_ipv4(peer_ip):
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
             try:
-                #s.connect((peer_ip, peer_port))
-                print(f'this is the part where we need to perform a handshake with the peer')
+                s.connect((peer_ip, peer_port))
+                print(f'connected to {peer_ip}, now its time to perform the secret handshake')
             except TimeoutError:
                 print('timeout')
             except InterruptedError:
                 print('interrupted')
         print('done with the connection, i got nothing')
 
-print('exit')
 

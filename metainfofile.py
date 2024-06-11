@@ -34,4 +34,4 @@ class MetaInfoFile:
     def get_urlencoded_info_hash(self):
         info_hash = self.get_info_hash()
         return quote(bytearray.fromhex(info_hash))
-        #return quote(info_hash)
+        # return quote(info_hash)
