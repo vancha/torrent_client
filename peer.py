@@ -8,27 +8,35 @@ def is_ipv4(ip: str):
     else:
         return False
 
+'''
+This represents a peer in the torrent network.
+'''
 class Peer:
+    '''
+    takes three arguments:
+        - client_id, which is the (unique) id of the client we use to connect to the peer
+        - ip, the ip address of the peer we want to connect to
+        - port, the port we need to connect to
+        - mif, the metainfo file object that lets us get the info_hash
+    '''
     def __init__(self, client_id, ip, port, mif):
         self.client_id  = client_id
         self.ip         = ip
         self.port       = port
         self.info_hash  = mif.get_info_hash_bytes()
     
-    #return true on success, false on failure
+    '''
+    Performs the handshake, if this returns False, the connection with the peer failed
+    '''
     def secret_handshake(self):
         pstr        = b"BitTorrent protocol"
         pstrlen     = bytes([len(pstr)])
         reserved    = bytearray(8)
         
-        #it's called peer id, but it's actually the id of our own client
-        peer_id     = self.client_id.encode('utf-8')
-
         #this makes a bytearray in the format of a torrent handshake
-        handshake = pstrlen + pstr + reserved + self.info_hash + peer_id
+        handshake = pstrlen + pstr + reserved + self.info_hash + self.client_id.encode('utf-8')
 
         try:
-            #send our handshake
             self.socket.sendall(handshake)
         
             #receive their response, this should look just like our handshake!
@@ -48,8 +56,39 @@ class Peer:
                 return True 
         except Exception as e:
             print(f'could not handshake peer because of {e}')
+    
+    #get a message from the socket, and parse it
+    #a message starts with a 4 byte length prefix
+    #followed by an id that corresponds to the type of message
+    #whatever is left of the message is part of the payload
+    def receive_message(self):
+        print('in the process of receiving a message from peer')
+        #first get the length prefix, which is a 4-byte big-endian value
+        socket_data = self.socket.recv(4)
+        length_prefix = int.from_bytes(socket_data, "big")
 
+        #then receive exactly that many bytes
+        message     = self.socket.recv(length_prefix)
 
+        #then get the message id, a single decimal byte
+        message_id  = message[0]
+
+        #the payload should be whatevers left in the response, can be nothing
+        message_payload = message[1:]
+        
+        message = {}
+        message['length_prefix'] = length_prefix
+        message['id'] = message_id
+        message['payload'] = message_payload
+
+    def initiate_peer_wire_protocol(self):
+        #do the thing
+        try:
+            while True:
+                #continually parse messages
+                message = self.receive_message()
+        except KeyboardInterrupt:
+            print(f'Keyboardinterrupt received, quit listening')
 
     def connect(self):
         #maybe focus on ipv4 for now, forget v6
@@ -57,14 +96,12 @@ class Peer:
             try:
                 self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
                 self.socket.connect((self.ip, self.port))
-                print(f'connected to {self.ip}, now its time to perform the secret handshake')
-                if not self.secret_handshake():
-                    print('Handshake failed, closing socket')
-                    self.socket.close()
-                else:
+                if self.secret_handshake():
                     print('hand shook. we done diddly did it')
+                    self.initiate_peer_wire_protocol()
+                print('done listening, closing socket')
+                self.socket.close()
             except Exception as e:
                 print(f'Error conecting to peer: {e}')
-            print('done with the connection, i got nothing')
         else:
             print(f'will not connect, is ipv6')
