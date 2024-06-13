@@ -1,6 +1,7 @@
 from    bencode_decoder.bencode_decoder import bdecoder
 from    urllib.parse    import quote
 import  hashlib
+import bencodepy
 
 class MetaInfoFile:
     def __init__(self, torrent_file_path):
@@ -27,9 +28,13 @@ class MetaInfoFile:
         #get decoded info dict
         info_dict = self._get_info_dict()
         #we need the hash of the encoded version, encode it
-        info_dict = bdecoder.encode(info_dict)
+        info_dict = bencodepy.encode(info_dict)#bdecoder.encode(info_dict)
         return  hashlib.sha1(info_dict).hexdigest()
-    
+   
+    def get_info_hash_bytes(self):
+        info_hash = self.get_info_hash()
+        return bytearray.fromhex(info_hash)
+
     #gets the urlencoded version of the byte encoded hash
     def get_urlencoded_info_hash(self):
         info_hash = self.get_info_hash()
