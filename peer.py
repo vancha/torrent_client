@@ -37,6 +37,12 @@ class Peer:
         self.ip         = ip
         self.port       = port
         self.info_hash  = mif.get_info_hash_bytes()
+
+        #also set the initial state of this peer
+        self.am_choking = True
+        self.am_interested = False
+        self.peer_choking = True
+        self.peer_interested = False
     
     '''
     Performs the handshake, if this returns False, the connection with the peer failed
@@ -75,7 +81,7 @@ class Peer:
     #followed by an id that corresponds to the type of message
     #whatever is left of the message is part of the payload
     def receive_message(self):
-        print('in the process of receiving a message from peer')
+        print('waiting for message from peer')
         #first get the length prefix, which is a 4-byte big-endian value
         socket_data = self.socket.recv(4)
         length_prefix = int.from_bytes(socket_data, "big")
@@ -89,10 +95,7 @@ class Peer:
         #the payload should be whatevers left in the response, can be nothing
         message_payload = message[1:]
         
-        message = {}
-        message['length_prefix'] = length_prefix
-        message['id'] = message_id
-        message['payload'] = message_payload
+        message = { "length_prefix": length_prefix, "id": message_id, "payload":message_payload}
         return message
 
     def initiate_peer_wire_protocol(self):
@@ -101,14 +104,21 @@ class Peer:
             while True:
                 #continually parse messages
                 message = self.receive_message()
+                if message["length_prefix"] == 0:
+                    print("received keepalive message")
+                    continue 
                 if message['id'] == message_ids["choke"]:
                     print('received choke message')
+                    self.peer_choking = True
                 elif message['id'] == message_ids["unchoke"]:
                     print('received unchoke message')
+                    self.peer_choking = False
                 elif message['id'] == message_ids["interested"]:
                     print('received interested message')
+                    self.peer_interested = True
                 elif message['id'] == message_ids["not interested"]:
                     print('received not interested message')
+                    self.peer_interested = False
                 elif message['id'] == message_ids["have"]:
                     print('received have message')
                 elif message['id'] == message_ids["bitfield"]:
