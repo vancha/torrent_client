@@ -8,6 +8,19 @@ def is_ipv4(ip: str):
     else:
         return False
 
+message_ids = {
+        "choke": 0,
+        "unchoke": 1,
+        "interested":2,
+        "not interested":3,
+        "have":4,
+        "bitfield":5,
+        "request":6,
+        "piece":7,
+        "cancel":8,
+        "port":9,
+}
+
 '''
 This represents a peer in the torrent network.
 '''
@@ -80,6 +93,7 @@ class Peer:
         message['length_prefix'] = length_prefix
         message['id'] = message_id
         message['payload'] = message_payload
+        return message
 
     def initiate_peer_wire_protocol(self):
         #do the thing
@@ -87,6 +101,29 @@ class Peer:
             while True:
                 #continually parse messages
                 message = self.receive_message()
+                if message['id'] == message_ids["choke"]:
+                    print('received choke message')
+                elif message['id'] == message_ids["unchoke"]:
+                    print('received unchoke message')
+                elif message['id'] == message_ids["interested"]:
+                    print('received interested message')
+                elif message['id'] == message_ids["not interested"]:
+                    print('received not interested message')
+                elif message['id'] == message_ids["have"]:
+                    print('received have message')
+                elif message['id'] == message_ids["bitfield"]:
+                    print('received bitfield message') 
+                elif message['id'] == message_ids["request"]:
+                    print('received request message')
+                elif message['id'] == message_ids["piece"]:
+                    print('received piece message')
+                elif message['id'] == message_ids["cancel"]:
+                    print('received cancel message')
+                elif message['id'] == message_ids["port"]:
+                    print('received port message')
+                else:
+                    print('received message without id')
+
         except KeyboardInterrupt:
             print(f'Keyboardinterrupt received, quit listening')
 
@@ -97,11 +134,11 @@ class Peer:
                 self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
                 self.socket.connect((self.ip, self.port))
                 if self.secret_handshake():
-                    print('hand shook. we done diddly did it')
+                    print('handshake performed, connected to peer')
                     self.initiate_peer_wire_protocol()
                 print('done listening, closing socket')
                 self.socket.close()
             except Exception as e:
                 print(f'Error conecting to peer: {e}')
-        else:
-            print(f'will not connect, is ipv6')
+        #else:
+        #    print(f'will not connect, is ipv6')
