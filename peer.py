@@ -1,5 +1,6 @@
 from ipaddress import ip_address, IPv4Address
 import socket
+import struct
 from struct import unpack
 
 
@@ -89,7 +90,6 @@ class Peer:
     # followed by an id that corresponds to the type of message
     # whatever is left of the message is part of the payload
     def receive_message(self):
-        print("waiting for message from peer")
         # first get the length prefix, which is a 4-byte big-endian value
         socket_data = self.socket.recv(4)
         length_prefix = int.from_bytes(socket_data, "big")
@@ -102,6 +102,7 @@ class Peer:
 
         # the payload should be whatevers left in the response, can be nothing
         message_payload = message[1:]
+        print(f'length of message is {len(message)}')
 
         message = {
             "length_prefix": length_prefix,
@@ -128,11 +129,12 @@ class Peer:
                 elif message["id"] == message_ids["interested"]:
                     print("received interested message")
                     self.peer_interested = True
-                elif message["id"] == message_ids["not intrested"]:
+                elif message["id"] == message_ids["not interested"]:
                     self.peer_interested = False
                     print("received not interested message")
                 elif message["id"] == message_ids["have"]:
-                    print("received have message")
+                    piece_index = struct.unpack('!I', message["payload"])
+                    print(f"received have message for index {piece_index}")
                 elif message["id"] == message_ids["bitfield"]:
                     print("received bitfield message")
                 elif message["id"] == message_ids["request"]:
@@ -150,7 +152,7 @@ class Peer:
             print(f"Keyboardinterrupt received, quit listening")
 
     def connect(self):
-        # maybe focus on ipv4 for now, forget v6
+        # ignoring v6 for now
         if is_ipv4(self.ip):
             try:
                 self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -162,5 +164,3 @@ class Peer:
                 self.socket.close()
             except Exception as e:
                 print(f"Error conecting to peer: {e}")
-        # else:
-        #    print(f'will not connect, is ipv6')
