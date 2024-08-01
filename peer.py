@@ -206,6 +206,27 @@ class Peer:
 
                     print(f"received piece message for piece {piece_index}, beginning at {begin}:{block}")
 
+
+                    #lets just put the code for verification here:
+                    #import hashlib
+                    #piece_nr = 13502
+                    #all_parts = []
+                    #for part in range(16):
+                    #  f = open(f'piece{piece_nr}part{part}.part','rb')
+                    #  all_parts.append(f.read())
+                    #complete_piece = b''.join(all_parts)
+                    #piece_hash = hashlib.sha1(complete_piece)
+                    #digest = piece_hash.digest()
+                    ##done calculating hash of the bytes, now lets get the hash from the metainfo file
+                    #contents = open("ubun.torrent","rb").read()
+                    #dont manually index in to it like this, just get the value from the decoded mif
+                    #mif_hashes = contents[354:]
+                    #start = piece_nr*20
+                    #end = start+20
+                    #mif_hash = mif_hashes[start:end]
+                    #assert(mif_hash == digest)
+
+
                 elif message["id"] == message_ids["cancel"]:
                     print("received cancel message")
                 elif message["id"] == message_ids["port"]:
