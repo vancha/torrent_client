@@ -88,7 +88,7 @@ class Peer:
             # if they don't match, we should drop the connection
             if not their_hash == self.info_hash:
                 # alright close the socket T.T we failed
-                return Fale
+                return False
             # if they do, we are succesfully connected!
             else:
                 return True
@@ -103,16 +103,32 @@ class Peer:
         # first get the length prefix, which is a 4-byte big-endian value
         socket_data = self.socket.recv(4)
         length_prefix = int.from_bytes(socket_data, "big")
-
+        if length_prefix == 0:
+            return { "length_prefix": 0, "id": None, "payload": None}
         # then receive exactly that many bytes
         message = self.socket.recv(length_prefix)
 
+        #now we will have to do some mandatory error handling or end up confused for over a year checking all possible torrent
+        #resources and wonder wtf went wrong only to find out that http://www.kristenwidman.com/blog/71/how-to-write-a-bittorrent-client-part-2/ mentions that there is no guarantee that messages will come in discrete packets containing only a single entire message and implementation does not account for that and it fails and everything is horrible pls note this
+        incomplete_message = False
+        while  len(message) < length_prefix:
+            incomplete_message = True
+            remaining_bytes = length_prefix - len(message)
+            message += self.socket.recv(remaining_bytes)
+            print(f"message has length {len(message)} but prefix requires {length_prefix}")
+        if incomplete_message:
+            print("apparently we had an incomplete message, but i dont know if i fixed it?")
+            incomplete_message = False
+            #exit(f"Error, we did not receive as many bytes as requested!: {message}")
         # then get the message id, a single decimal byte
+
+        if len(message) < 1:
+            exit(f"Error, cannot get payload of this message!")
         message_id = message[0]
 
         # the payload should be whatevers left in the response, can be nothing
         message_payload = message[1:]
-        print(f'length of message is {len(message)}')
+
 
         message = {
             "length_prefix": length_prefix,
@@ -166,7 +182,7 @@ class Peer:
                         have_message = messages[message_ids["request"]] + index + begin + length
                         print(f'sent have message: {have_message}')
                         self.send_message(have_message)
-                        time.sleep(.01)
+                        #time.sleep(.01)
                 elif message["id"] == message_ids["bitfield"]:
                     print("received bitfield message")
                 elif message["id"] == message_ids["request"]:
@@ -183,7 +199,7 @@ class Peer:
                     # write a new file, or
                     # "ab" mode to append
                     part = begin // 2 ** 14
-                    with open(f"./part-{part}({piece_index})", "wb") as binary_file:
+                    with open(f"./piece{piece_index}part{part}.part", "wb") as binary_file:
 
                         # Write bytes to file
                         binary_file.write(block)
