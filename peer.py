@@ -2,7 +2,7 @@ from ipaddress import ip_address, IPv4Address
 import socket
 import struct
 from struct import unpack
-
+import time
 
 def is_ipv4(ip: str):
     if type(ip_address(ip)) is IPv4Address:
@@ -22,6 +22,13 @@ message_ids = {
     "piece": 7,
     "cancel": 8,
     "port": 9,
+}
+
+messages = {
+    message_ids["choke"]        : b"\x00\x00\x00\x01\x00",
+    message_ids["unchoke"]      : b"\x00\x00\x00\x01\x01",
+    message_ids["interested"]   : b"\x00\x00\x00\x01\x02",
+    message_ids["request"]      : b"\x00\x00\x00\x0d\x06",
 }
 
 """
@@ -53,6 +60,9 @@ class Peer:
     """
     Performs the handshake, if this returns False, the connection with the peer failed
     """
+    def send_message(self, message):
+        self.socket.send(message)
+
 
     def secret_handshake(self):
         pstr = b"BitTorrent protocol"
@@ -126,6 +136,10 @@ class Peer:
                 elif message["id"] == message_ids["unchoke"]:
                     print("received unchoke message")
                     self.peer_choking = False
+                    time.sleep(.01)
+                    self.send_message(messages[message_ids["interested"]])
+                    time.sleep(.01)
+                    self.send_message(messages[message_ids["unchoke"]])
                 elif message["id"] == message_ids["interested"]:
                     print("received interested message")
                     self.peer_interested = True
@@ -135,12 +149,47 @@ class Peer:
                 elif message["id"] == message_ids["have"]:
                     piece_index = struct.unpack('!I', message["payload"])
                     print(f"received have message for index {piece_index}")
+                    time.sleep(.01)
+                    #lets define a request message in response to this have message:
+                    #we will request the same piece that the peer tells us it has
+                    index   = (piece_index[0]).to_bytes(4, byteorder='big')#message["payload"]
+                    #some math is required here. The torrent file says that the length of each block is 262144 bytes
+                    #we can only request a maximum of 2 ** 14 bytes at a time according to the specification (16384 bytes)
+                    #that means that we need to send at least 16 requests to get the entire block
+                    #starting at index 0
+                    for idx in range(16):
+
+                        begin   = ( idx * (2**14)).to_bytes(4, byteorder='big') #b"\x00\x00\x00\x00"
+                        #request part of a block that's 2 ** 14 bytes long
+                        length  = (2**14).to_bytes(4, byteorder='big')
+                        #to get this whole block, we need 16 of the following messages, that all have a different value for begin
+                        have_message = messages[message_ids["request"]] + index + begin + length
+                        print(f'sent have message: {have_message}')
+                        self.send_message(have_message)
+                        time.sleep(.01)
                 elif message["id"] == message_ids["bitfield"]:
                     print("received bitfield message")
                 elif message["id"] == message_ids["request"]:
                     print("received request message")
                 elif message["id"] == message_ids["piece"]:
-                    print("received piece message")
+                    piece_index = struct.unpack('!I', message["payload"][0:4])[0]
+                    begin = struct.unpack('!I', message["payload"][4:8])[0]
+                    print(f'length of payload is {len(message["payload"])}')
+                    block = message["payload"][8:]
+
+                    #some_bytes = b'\xC3\xA9'
+
+                    # Open in "wb" mode to
+                    # write a new file, or
+                    # "ab" mode to append
+                    part = begin // 2 ** 14
+                    with open(f"./part-{part}({piece_index})", "wb") as binary_file:
+
+                        # Write bytes to file
+                        binary_file.write(block)
+
+                    print(f"received piece message for piece {piece_index}, beginning at {begin}:{block}")
+
                 elif message["id"] == message_ids["cancel"]:
                     print("received cancel message")
                 elif message["id"] == message_ids["port"]:
