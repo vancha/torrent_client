@@ -49,7 +49,8 @@ class Peer:
         self.client_id = client_id
         self.ip = ip
         self.port = port
-        self.info_hash = mif.get_info_hash_bytes()
+        self.mif = mif
+        #self.info_hash = mif.get_info_hash_bytes()
 
         # also set the initial state of this peer
         self.am_choking = True
@@ -71,7 +72,7 @@ class Peer:
 
         # this makes a bytearray in the format of a torrent handshake
         handshake = (
-            pstrlen + pstr + reserved + self.info_hash + self.client_id.encode("utf-8")
+            pstrlen + pstr + reserved + self.mif.get_info_hash_bytes() + self.client_id.encode("utf-8")
         )
 
         try:
@@ -82,11 +83,11 @@ class Peer:
 
             # to verify this repsonse is valid, compare their info hash with ours
             start_idx = len(pstrlen) + len(pstr) + len(reserved)
-            end_idx = start_idx + len(self.info_hash)
+            end_idx = start_idx + len(self.mif.get_info_hash_bytes())#self.info_hash)
             their_hash = shake_response[start_idx:end_idx]
 
             # if they don't match, we should drop the connection
-            if not their_hash == self.info_hash:
+            if not their_hash == self.mif.get_info_hash_bytes():#self.info_hash:
                 # alright close the socket T.T we failed
                 return False
             # if they do, we are succesfully connected!
@@ -190,42 +191,13 @@ class Peer:
                 elif message["id"] == message_ids["piece"]:
                     piece_index = struct.unpack('!I', message["payload"][0:4])[0]
                     begin = struct.unpack('!I', message["payload"][4:8])[0]
-                    print(f'length of payload is {len(message["payload"])}')
                     block = message["payload"][8:]
-
-                    #some_bytes = b'\xC3\xA9'
-
-                    # Open in "wb" mode to
-                    # write a new file, or
-                    # "ab" mode to append
                     part = begin // 2 ** 14
-                    with open(f"./piece{piece_index}part{part}.part", "wb") as binary_file:
-
+                    with open(f"./pieces/piece{piece_index}part{part}.part", "wb") as binary_file:
                         # Write bytes to file
                         binary_file.write(block)
-
-                    print(f"received piece message for piece {piece_index}, beginning at {begin}:{block}")
-
-
-                    #lets just put the code for verification here:
-                    #import hashlib
-                    #piece_nr = 13502
-                    #all_parts = []
-                    #for part in range(16):
-                    #  f = open(f'piece{piece_nr}part{part}.part','rb')
-                    #  all_parts.append(f.read())
-                    #complete_piece = b''.join(all_parts)
-                    #piece_hash = hashlib.sha1(complete_piece)
-                    #digest = piece_hash.digest()
-                    ##done calculating hash of the bytes, now lets get the hash from the metainfo file
-                    #contents = open("ubun.torrent","rb").read()
-                    #dont manually index in to it like this, just get the value from the decoded mif
-                    #mif_hashes = contents[354:]
-                    #start = piece_nr*20
-                    #end = start+20
-                    #mif_hash = mif_hashes[start:end]
-                    #assert(mif_hash == digest)
-
+                    if self.mif.verify_piece(piece_index):
+                        self.set_piece_as_verified(piece_index)
 
                 elif message["id"] == message_ids["cancel"]:
                     print("received cancel message")
@@ -236,6 +208,11 @@ class Peer:
 
         except KeyboardInterrupt:
             print(f"Keyboardinterrupt received, quit listening")
+
+    #adds a piece_nr to the json file that stores all completed pieces
+    #can remove the piece and parts files, write the contents of the full piece to the output file
+    def set_piece_as_verified(self, piece_nr):
+        print(f"Completely downloaded piece {piece_nr}, writing it to output file now!")
 
     def connect(self):
         # ignoring v6 for now
