@@ -3,6 +3,8 @@ from bencode_decoder.bencode_decoder import bdecoder
 from metainfofile import MetaInfoFile
 from tracker import Tracker
 from peer import Peer
+from threading import Thread
+
 
 # to generate the sha-1 info_hash from the info_dict
 import hashlib
@@ -29,6 +31,7 @@ response = tracker.get_peers()
 
 # get peer descriptions from the response, just assume this was successful
 peers = list(bdecoder.decode(response).values())[3]
+print(f"peers: {peers}")
 
 # turn the list of peer descriptions to a list of actual peer objects
 peers = list(
@@ -42,4 +45,6 @@ peers = list(
 
 # connect to them
 for peer in peers:
-    peer.connect()
+    #peer.connect()
+    Thread(target = peer.connect).start()
+    

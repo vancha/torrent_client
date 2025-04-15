@@ -4,6 +4,7 @@ import struct
 import hashlib
 from struct import unpack
 import time
+import os
 
 def is_ipv4(ip: str):
     if type(ip_address(ip)) is IPv4Address:
@@ -51,7 +52,6 @@ class Peer:
         self.ip = ip
         self.port = port
         self.mif = mif
-        #self.info_hash = mif.get_info_hash_bytes()
 
         # also set the initial state of this peer
         self.am_choking = True
@@ -66,7 +66,7 @@ class Peer:
         self.socket.send(message)
 
 
-    def secret_handshake(self):
+    def secret_handshake_successful(self):
         pstr = b"BitTorrent protocol"
         pstrlen = bytes([len(pstr)])
         reserved = bytearray(8)
@@ -78,18 +78,15 @@ class Peer:
 
         try:
             self.socket.sendall(handshake)
+            handshake_response = self.socket.recv(68)
 
-            # receive their response, this should look just like our handshake!
-            shake_response = self.socket.recv(68)
-
-            # to verify this repsonse is valid, compare their info hash with ours
+            # to verify this response is valid, compare their info hash with ours
             start_idx = len(pstrlen) + len(pstr) + len(reserved)
             end_idx = start_idx + len(self.mif.get_info_hash_bytes())#self.info_hash)
-            their_hash = shake_response[start_idx:end_idx]
+            their_hash = handshake_response[start_idx:end_idx]
 
             # if they don't match, we should drop the connection
             if not their_hash == self.mif.get_info_hash_bytes():#self.info_hash:
-                # alright close the socket T.T we failed
                 return False
             # if they do, we are succesfully connected!
             else:
@@ -151,8 +148,8 @@ class Peer:
             try:
                 file = f'pieces/piece{piece_index}part{part}.part'
                 os.remove(file)
-                sub_pieces.append(f.read())
-            except:
+            except Exception as e:
+                print(f"failed deleting piece {e}")
                 #we don't care about exception, if a piece is missing we won't be able to find it
                 pass
     
@@ -167,10 +164,12 @@ class Peer:
             # Write bytes to file
             binary_file.write(complete_piece)
         self.delete_piece(piece_index)
+        print(f"piece moved")
     
     
     #combines the subpieces into one piece, moves it to the "finished_pieces" folder
     def verify_piece(self, piece_index):
+        print(f"verifying")
         #combine
         sub_pieces = []
         for part in range(16):
@@ -187,79 +186,107 @@ class Peer:
         digest = piece_hash.digest()
         #verify
         if self.mif.piece_hash_in_bytes(piece_index) == digest:
-            #move
             self.move_piece(piece_index)
         else:
-            #delete
             self.delete_piece(piece_index)
-                                
+    
+    def handle_keepalive_message(self):
+        print(f"received keepalive message")
+        
+    def handle_choke_message(self):
+        self.peer_choking = True
+    
+    def handle_unchoke_message(self):
+        print("received unchoke message")
+        self.peer_choking = False
+        time.sleep(.01)
+        self.send_message(messages[message_ids["interested"]])
+        time.sleep(.01)
+        self.send_message(messages[message_ids["unchoke"]])
+    
+    def handle_interested_message(self):
+        print("received interested message")
+        self.peer_interested = True
+    
+    def handle_notinterested_message(self):
+        self.peer_interested = False
+        print("received not interested message")
+    
+    def handle_have_message(self, message):
+        piece_index = struct.unpack('!I', message["payload"])
+        time.sleep(.001)
+        #lets define a request message in response to this have message:
+        #we will request the same piece that the peer tells us it has
+        index   = (piece_index[0]).to_bytes(4, byteorder='big')#message["payload"]
+        #some math is required here. The torrent file says that the length of each block is 262144 bytes
+        #we can only request a maximum of 2 ** 14 bytes at a time according to the specification (16384 bytes)
+        #that means that we need to send at least 16 requests to get the entire block
+        #starting at index 0
+        for idx in range(16):
+            begin   = ( idx * (2**14)).to_bytes(4, byteorder='big') #b"\x00\x00\x00\x00"
+            #request part of a block that's 2 ** 14 bytes long
+            length  = (2**14).to_bytes(4, byteorder='big')
+            #to get this whole block, we need 16 of the following messages, that all have a different value for begin
+            have_message = messages[message_ids["request"]] + index + begin + length
+            self.send_message(have_message)
+            #time.sleep(.01)
+            
+    def handle_bitfield_message(self):
+        print(f"received le bitfield")
+    
+    def handle_request_message(self):
+        print("received request message")
+    
+    def handle_piece_message(self, message):
+        piece_index = struct.unpack('!I', message["payload"][0:4])[0]
+        begin = struct.unpack('!I', message["payload"][4:8])[0]
+        block = message["payload"][8:]
+        part = begin // 2 ** 14
+        with open(f"./pieces/piece{piece_index}part{part}.part", "wb") as binary_file:
+            binary_file.write(block)
+        if self.all_subpieces_received(piece_index):
+            self.verify_piece(piece_index)
+            
+    def handle_cancel_message(self):
+         print("received cancel message")
+    
+    def handle_port_message(self, message):
+        print("received port message")
+        
+    def handle_unknown_message(self, message):
+        print(f"received an unknown message")
+        
     def initiate_peer_wire_protocol(self):
         try:
             while True:
                 # continually parse messages
                 message = self.receive_message()
                 if message["length_prefix"] == 0:
-                    print("received keepalive message")
+                    self.handle_keepalive_message()
                     continue
-                if message["id"] == message_ids["choke"]:
-                    print("received choke message")
-                    self.peer_choking = True
-                elif message["id"] == message_ids["unchoke"]:
-                    print("received unchoke message")
-                    self.peer_choking = False
-                    time.sleep(.01)
-                    self.send_message(messages[message_ids["interested"]])
-                    time.sleep(.01)
-                    self.send_message(messages[message_ids["unchoke"]])
-                elif message["id"] == message_ids["interested"]:
-                    print("received interested message")
-                    self.peer_interested = True
-                elif message["id"] == message_ids["not interested"]:
-                    self.peer_interested = False
-                    print("received not interested message")
-                elif message["id"] == message_ids["have"]:
-                    piece_index = struct.unpack('!I', message["payload"])
-                    print(f"received have message for index {piece_index}")
-                    time.sleep(.01)
-                    #lets define a request message in response to this have message:
-                    #we will request the same piece that the peer tells us it has
-                    index   = (piece_index[0]).to_bytes(4, byteorder='big')#message["payload"]
-                    #some math is required here. The torrent file says that the length of each block is 262144 bytes
-                    #we can only request a maximum of 2 ** 14 bytes at a time according to the specification (16384 bytes)
-                    #that means that we need to send at least 16 requests to get the entire block
-                    #starting at index 0
-                    for idx in range(16):
-                        begin   = ( idx * (2**14)).to_bytes(4, byteorder='big') #b"\x00\x00\x00\x00"
-                        #request part of a block that's 2 ** 14 bytes long
-                        length  = (2**14).to_bytes(4, byteorder='big')
-                        #to get this whole block, we need 16 of the following messages, that all have a different value for begin
-                        have_message = messages[message_ids["request"]] + index + begin + length
-                        print(f'sent request message: {have_message}')
-                        self.send_message(have_message)
-                        #time.sleep(.01)
-                elif message["id"] == message_ids["bitfield"]:
-                    print("received bitfield message")
-                elif message["id"] == message_ids["request"]:
-                    print("received request message")
-                elif message["id"] == message_ids["piece"]:
-                    piece_index = struct.unpack('!I', message["payload"][0:4])[0]
-                    begin = struct.unpack('!I', message["payload"][4:8])[0]
-                    block = message["payload"][8:]
-                    part = begin // 2 ** 14
-                    with open(f"./pieces/piece{piece_index}part{part}.part", "wb") as binary_file:
-                        # Write bytes to file
-                        binary_file.write(block)
-                    if self.all_subpieces_received(piece_index):
-                        self.verify_piece(piece_index)
-                        #if self.mif.verify_piece(piece_index):
-                        #    self.set_piece_as_verified(piece_index)
-
-                elif message["id"] == message_ids["cancel"]:
-                    print("received cancel message")
-                elif message["id"] == message_ids["port"]:
-                    print("received port message")
-                else:
-                    print("received message without id")
+                match message["id"]:
+                    case 0:
+                        self.handle_choke_message()
+                    case 1:
+                        self.handle_unchoke_message()
+                    case 2:
+                        self.handle_interested_message()
+                    case 3:
+                        self.handle_notinterested_message()
+                    case 4:
+                        self.handle_have_message(message)
+                    case 5:
+                        self.handle_bitfield_message()
+                    case 6:
+                        self.handle_request_message()
+                    case 7:
+                        self.handle_piece_message(message)
+                    case 8:
+                        self.handle_cancel_message()
+                    case 9:
+                        self.handle_port_message(message)
+                    case _:
+                        self.handle_unknown_message(message)
 
         except KeyboardInterrupt:
             print(f"Keyboardinterrupt received, quit listening")
@@ -273,7 +300,7 @@ class Peer:
         try:
             #should handle both ipv4 and ipv6
             self.socket = socket.create_connection((self.ip, self.port))
-            if self.secret_handshake():
+            if self.secret_handshake_successful():
                 self.initiate_peer_wire_protocol()
             self.socket.close()
         except Exception as e:
