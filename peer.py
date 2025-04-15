@@ -156,6 +156,19 @@ class Peer:
                 #we don't care about exception, if a piece is missing we won't be able to find it
                 pass
     
+    #takes all the parts, combines them, and moves them to the completed folder
+    def move_piece(self, piece_index):
+        sub_pieces = []
+        for part in range(16):
+            f = open(f'pieces/piece{piece_index}part{part}.part','rb')
+            sub_pieces.append(f.read())  
+        complete_piece = b''.join(sub_pieces)
+        with open(f"./completed_pieces/{piece_index}.piece", "wb") as binary_file:
+            # Write bytes to file
+            binary_file.write(complete_piece)
+        self.delete_piece(piece_index)
+    
+    
     #combines the subpieces into one piece, moves it to the "finished_pieces" folder
     def verify_piece(self, piece_index):
         #combine
@@ -166,19 +179,17 @@ class Peer:
                 sub_pieces.append(f.read())
             #failure means piece incomplete, delete it
             except FileNotFoundError:
-               self.delete_piece(piece_index)
-               return
+                self.delete_piece(piece_index)
+                return
         
         complete_piece = b''.join(sub_pieces)
         piece_hash = hashlib.sha1(complete_piece)
         digest = piece_hash.digest()
-        
         #verify
         if self.mif.piece_hash_in_bytes(piece_index) == digest:
-            print(f"Hon hon! le piece est complete, move ze file")
             #move
+            self.move_piece(piece_index)
         else:
-            print(f"Sacre blue, such an incomplete piece,delete ze file")
             #delete
             self.delete_piece(piece_index)
                                 

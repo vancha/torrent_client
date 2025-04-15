@@ -52,25 +52,7 @@ class MetaInfoFile:
         start = piece_number * 20;
         end = start + 20
         return pieces[start:end]
-        
-    #if all pieces have been downloaded, verify it with the hash
-    def verify_piece(self, piece_number):
-        #try to collect all parts of the piece here
-        sub_pieces = []
-        #load all parts of this piece from disk (0 through 15)
-        for part in range(16):
-            #we will *try* to load the part from the disk
-            try:
-                f = open(f'pieces/piece{piece_number}part{part}.part','rb')
-                sub_pieces.append(f.read())
-            #but if we fail, that means this piece is incomplete, we cannot verify
-            except FileNotFoundError:
-                return False
-        
-        complete_piece = b''.join(sub_pieces)
-        piece_hash = hashlib.sha1(complete_piece)
-        digest = piece_hash.digest()
-        return self.piece_hash_in_bytes(piece_number) == digest
+
 
     # gets the urlencoded version of the byte encoded hash
     def get_urlencoded_info_hash(self):
