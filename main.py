@@ -17,7 +17,8 @@ from urllib.parse import quote
 PEER_ID = "thurmanmermanddddddd"
 
 # Decode metainfo file
-mif = MetaInfoFile("./ubun.torrent")
+mif = MetaInfoFile("./test.torrent")
+
 # set up tracker using valuers from decoded metainfo file
 tracker = Tracker(mif, PEER_ID)
 # send the http "GET" request to the tracker to get list of peers

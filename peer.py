@@ -116,10 +116,7 @@ class Peer:
             incomplete_message = True
             remaining_bytes = length_prefix - len(message)
             message += self.socket.recv(remaining_bytes)
-            print(f"message has length {len(message)} but prefix requires {length_prefix}")
-        if incomplete_message:
-            print("apparently we had an incomplete message, but i dont know if i fixed it?")
-            incomplete_message = False
+
             #exit(f"Error, we did not receive as many bytes as requested!: {message}")
         # then get the message id, a single decimal byte
 
@@ -138,8 +135,17 @@ class Peer:
         }
         return message
 
+    def all_subpieces_received(self, piece_index):
+        for part in range(16):
+            #we will *try* to load the part from the disk
+            try:
+                f = open(f'pieces/piece{piece_index}part{part}.part','rb')
+            #but if we fail, that means this piece is incomplete, we cannot verify
+            except FileNotFoundError:
+                return False
+        return True
+                                
     def initiate_peer_wire_protocol(self):
-        # do the thing
         try:
             while True:
                 # continually parse messages
@@ -175,13 +181,12 @@ class Peer:
                     #that means that we need to send at least 16 requests to get the entire block
                     #starting at index 0
                     for idx in range(16):
-
                         begin   = ( idx * (2**14)).to_bytes(4, byteorder='big') #b"\x00\x00\x00\x00"
                         #request part of a block that's 2 ** 14 bytes long
                         length  = (2**14).to_bytes(4, byteorder='big')
                         #to get this whole block, we need 16 of the following messages, that all have a different value for begin
                         have_message = messages[message_ids["request"]] + index + begin + length
-                        print(f'sent have message: {have_message}')
+                        print(f'sent request message: {have_message}')
                         self.send_message(have_message)
                         #time.sleep(.01)
                 elif message["id"] == message_ids["bitfield"]:
@@ -196,8 +201,9 @@ class Peer:
                     with open(f"./pieces/piece{piece_index}part{part}.part", "wb") as binary_file:
                         # Write bytes to file
                         binary_file.write(block)
-                    if self.mif.verify_piece(piece_index):
-                        self.set_piece_as_verified(piece_index)
+                    if self.all_subpieces_received(piece_index):
+                        if self.mif.verify_piece(piece_index):
+                            self.set_piece_as_verified(piece_index)
 
                 elif message["id"] == message_ids["cancel"]:
                     print("received cancel message")
@@ -215,15 +221,12 @@ class Peer:
         print(f"Completely downloaded piece {piece_nr}, writing it to output file now!")
 
     def connect(self):
-        # ignoring v6 for now
-        if is_ipv4(self.ip):
-            try:
-                self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                self.socket.connect((self.ip, self.port))
-                if self.secret_handshake():
-                    print("handshake performed, connected to peer")
-                    self.initiate_peer_wire_protocol()
-                print("done listening, closing socket")
-                self.socket.close()
-            except Exception as e:
-                print(f"Error conecting to peer: {e}")
+        try:
+            #should handle both ipv4 and ipv6
+            self.socket = socket.create_connection((self.ip, self.port))
+            if self.secret_handshake():
+                self.initiate_peer_wire_protocol()
+            self.socket.close()
+        except Exception as e:
+            print(f"Error conecting to peer: {e}")
+

@@ -11,16 +11,25 @@ class MetaInfoFile:
 
     # number of bytes in each piece, as integer
     def get_piece_length(self):
-        return self.meta_info_dict[b"pieces"]
-
+        return self.meta_info_dict[b"info"][b'piece length']
+        
+    # length of the entire file to download in bytes, only for single file mode, will crash for multiple file mode!
     def get_total_bytes(self):
-        # @todo: this will crash for multiple file mode torrents
         return self.meta_info_dict[b"info"][b"length"]
-
+    
+    #20 byte SHA1 hashes of all pieces
+    def get_pieces(self):
+        return self.meta_info_dict[b"info"][b"pieces"]
+    
+    #the total number of pieces to download
+    def get_number_of_pieces(self):
+        pieces = self.get_pieces()
+        return len(pieces) // 20
+    
+    #the announce url of the tracker
     def get_announce_url(self):
         return self.meta_info_dict[b"announce"].decode("utf-8")
 
-    # 20 byte sha1 hashes of all pieces, as bytestring
     def _get_info_dict(self):
         return self.meta_info_dict[b"info"]
 
@@ -32,18 +41,19 @@ class MetaInfoFile:
         info_dict = bencodepy.encode(info_dict)  # bdecoder.encode(info_dict)
         return hashlib.sha1(info_dict).hexdigest()
 
+    #needed for the peer handshake
     def get_info_hash_bytes(self):
         info_hash = self.get_info_hash()
         return bytearray.fromhex(info_hash)
 
-    #This is not the way to do it, hardcoded only works for this specific torrent file
+    #the hash of an individual piece
     def piece_hash_in_bytes(self, piece_number):
-        file_content    = open('ubun.torrent','rb').read()
-        pieces          = file_content[354:]
-        piece_start     = piece_number * 20
-        piece_end       = piece_start + 20
-        return pieces[piece_start:piece_end]
-
+        pieces = self.get_pieces()
+        start = piece_number * 20;
+        end = start + 20
+        return pieces[start:end]
+        
+    #if all pieces have been downloaded, verify it with the hash
     def verify_piece(self, piece_number):
         #try to collect all parts of the piece here
         sub_pieces = []
@@ -56,15 +66,13 @@ class MetaInfoFile:
             #but if we fail, that means this piece is incomplete, we cannot verify
             except FileNotFoundError:
                 return False
-
+        
         complete_piece = b''.join(sub_pieces)
         piece_hash = hashlib.sha1(complete_piece)
         digest = piece_hash.digest()
-
         return self.piece_hash_in_bytes(piece_number) == digest
 
     # gets the urlencoded version of the byte encoded hash
     def get_urlencoded_info_hash(self):
         info_hash = self.get_info_hash()
         return quote(bytearray.fromhex(info_hash))
-        # return quote(info_hash)
