@@ -1,6 +1,7 @@
 from ipaddress import ip_address, IPv4Address
 import socket
 import struct
+import hashlib
 from struct import unpack
 import time
 
@@ -137,13 +138,49 @@ class Peer:
 
     def all_subpieces_received(self, piece_index):
         for part in range(16):
-            #we will *try* to load the part from the disk
             try:
                 f = open(f'pieces/piece{piece_index}part{part}.part','rb')
             #but if we fail, that means this piece is incomplete, we cannot verify
             except FileNotFoundError:
                 return False
         return True
+        
+    #deletes the piece from disk, it's bad >:(
+    def delete_piece(self, piece_index):
+        for part in range(16):
+            try:
+                file = f'pieces/piece{piece_index}part{part}.part'
+                os.remove(file)
+                sub_pieces.append(f.read())
+            except:
+                #we don't care about exception, if a piece is missing we won't be able to find it
+                pass
+    
+    #combines the subpieces into one piece, moves it to the "finished_pieces" folder
+    def verify_piece(self, piece_index):
+        #combine
+        sub_pieces = []
+        for part in range(16):
+            try:
+                f = open(f'pieces/piece{piece_index}part{part}.part','rb')
+                sub_pieces.append(f.read())
+            #failure means piece incomplete, delete it
+            except FileNotFoundError:
+               self.delete_piece(piece_index)
+               return
+        
+        complete_piece = b''.join(sub_pieces)
+        piece_hash = hashlib.sha1(complete_piece)
+        digest = piece_hash.digest()
+        
+        #verify
+        if self.mif.piece_hash_in_bytes(piece_index) == digest:
+            print(f"Hon hon! le piece est complete, move ze file")
+            #move
+        else:
+            print(f"Sacre blue, such an incomplete piece,delete ze file")
+            #delete
+            self.delete_piece(piece_index)
                                 
     def initiate_peer_wire_protocol(self):
         try:
@@ -202,8 +239,9 @@ class Peer:
                         # Write bytes to file
                         binary_file.write(block)
                     if self.all_subpieces_received(piece_index):
-                        if self.mif.verify_piece(piece_index):
-                            self.set_piece_as_verified(piece_index)
+                        self.verify_piece(piece_index)
+                        #if self.mif.verify_piece(piece_index):
+                        #    self.set_piece_as_verified(piece_index)
 
                 elif message["id"] == message_ids["cancel"]:
                     print("received cancel message")
