@@ -1,6 +1,5 @@
 from collections import OrderedDict
 from bencode_decoder.bencode_decoder import bdecoder
-from metainfofile import MetaInfoFile
 from torrent_client import TorrentClient
 from peer import Peer
 from threading import Thread
@@ -15,10 +14,6 @@ from urllib import request
 
 # to perform urlencoding on for example the info_hash
 from urllib.parse import quote
-
-
-# Decode metainfo file
-mif = MetaInfoFile("./test.torrent")
 
 # set up tracker using valuers from decoded metainfo file
 #tracker = Tracker(mif, PEER_ID)

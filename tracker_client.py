@@ -1,5 +1,6 @@
 import requests
 from urllib.parse import urlencode
+from constants import PEER_ID
 
 
 """
@@ -8,15 +9,10 @@ represents the tracker and handles all communication with it
 
 
 class TrackerClient:
-    def __init__(self, meta_info_object, peer_id, port=6881):
-        self.left = self.calculate_bytes_left()
+    def __init__(self, meta_info_object, port=6881): 
         self.port = port
-        self.peer_id = peer_id
         self.urlencoded_info_hash = meta_info_object.get_urlencoded_info_hash()
         self.announce_url = meta_info_object.get_announce_url()
-    
-    #def calculate_bytes_left(self):
-    #    return meta_info_object.get_total_bytes()
 
     '''
         returns a list of peers or None
@@ -24,11 +20,9 @@ class TrackerClient:
         @Todo: 
         
     '''
-    def get_peers(self, uploaded=0, downloaded=0, left=None, event="started", numwant=30):
-        if not left:
-            left = self.left
+    def get_peers(self, uploaded=0, downloaded=0, left=0, event="started", numwant=30):
         # lets build the url first with all the parameters inserted
-        url = f"{self.announce_url}?info_hash={self.urlencoded_info_hash}&peer_id={self.peer_id}&port={self.port}&uploaded={uploaded}&downloaded={downloaded}&left={left}&event={event}&numwant={numwant}"
+        url = f"{self.announce_url}?info_hash={self.urlencoded_info_hash}&peer_id={PEER_ID}&port={self.port}&uploaded={uploaded}&downloaded={downloaded}&left={left}&event={event}&numwant={numwant}"
 
         response = requests.get(url)
 

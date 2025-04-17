@@ -1,5 +1,8 @@
 from tracker_client import TrackerClient
-
+from metainfo_file import MetainfoFile
+from peer_manager import PeerManager
+from piece_selector import PieceSelector
+from constants import MIN_PEERS
 
 '''
 @todo:
@@ -10,14 +13,17 @@ from tracker_client import TrackerClient
 class TorrentClient:
     def __init__(self):
         #probably needs the tracker url
-        self.tracker_client = TrackerClient()
+        self.metainfo_file = MetainfoFile("./test.torrent")
+        self.tracker_client = TrackerClient(self.metainfo_file)
         self.peer_manager   = PeerManager()
         self.piece_selector = PieceSelector()
         
         peers = self.tracker_client.get_peers()
-        self.peer_manager.add_peers(new_peers)
+        self.peer_manager.add_peers(peers)
         
-        
+    def calculate_remaining_bytes(self):
+        pass
+    
     #performs all the steps required for downloading a file
     def step(self):
         #drops connection with peers that are either disconnected, timed out, or otherwise
