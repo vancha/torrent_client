@@ -1,6 +1,6 @@
 from enum import Enum
 
-MIN_PEERS   = 30
+MIN_PEERS   = 10
 PEER_ID     = "thurmanmermanddddddd"
 
 class MessageType(Enum):

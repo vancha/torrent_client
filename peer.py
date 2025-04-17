@@ -1,43 +1,14 @@
-from ipaddress import ip_address, IPv4Address
 import socket
 import struct
 import hashlib
 from struct import unpack
 import time
 import os
-
-def is_ipv4(ip: str):
-    if type(ip_address(ip)) is IPv4Address:
-        return True
-    else:
-        return False
-
-
-message_ids = {
-    "choke": 0,
-    "unchoke": 1,
-    "interested": 2,
-    "not interested": 3,
-    "have": 4,
-    "bitfield": 5,
-    "request": 6,
-    "piece": 7,
-    "cancel": 8,
-    "port": 9,
-}
-
-messages = {
-    message_ids["choke"]        : b"\x00\x00\x00\x01\x00",
-    message_ids["unchoke"]      : b"\x00\x00\x00\x01\x01",
-    message_ids["interested"]   : b"\x00\x00\x00\x01\x02",
-    message_ids["request"]      : b"\x00\x00\x00\x0d\x06",
-}
+from message import Message
 
 """
 This represents a peer in the torrent network.
 """
-
-
 class Peer:
     """
     takes three arguments:
@@ -102,14 +73,16 @@ class Peer:
 
     # receive message from the remote peer
     def receive_message(self):
-        length_prefix = int.from_bytes(self.socket.recv(4), "big")
+        prefix_bytes = self.socket.recv(4)
+        length_prefix = int.from_bytes(prefix_bytes, "big")
+        print(f"prefix of this message: {prefix_bytes} ({length_prefix})")
         message_bytes = self.socket.recv(length_prefix)
-        while  len(message) < length_prefix:
+        while  len(message_bytes) < length_prefix:
             remaining_bytes = length_prefix - len(message_bytes)
             message_bytes += self.socket.recv(remaining_bytes)
-
-        return  Message.from_bytes(message_bytes)
-        
+        all_bytes = prefix_bytes + message_bytes
+        print(f"the argument for message.from_bytes: {all_bytes}")
+        return  Message.from_bytes(all_bytes)
 
     def all_subpieces_received(self, piece_index):
         for part in range(16):
@@ -209,7 +182,7 @@ class Peer:
             #time.sleep(.01)
             
     def handle_bitfield_message(self, message):
-        print(f"received le bitfield")
+        print(f"received le bitfield: {message.payload}")
     
     def handle_request_message(self):
         print("received request message")
@@ -271,17 +244,27 @@ class Peer:
         print(f"maintain_connection not implemented yet")
 
     def connect(self):
+        print(f"attempting to connect to peer")
         try:
-            #should handle both ipv4 and ipv6
             self.socket = socket.create_connection((self.ip, self.port))
+            print(f"created socket connection")
             if self.secret_handshake_successful():
-                self.last_contacted = datetime.now()
-            return True
+                print(f"shook hands")
+                #self.last_contacted = datetime.now()
+                #print(f"saved time of shaking")
+                return True
+            return False
         except Exception as e:
             return False
 
+    #@Todo: check if this peer has not timed out, currently placeholder
+    def is_not_timed_out(self):
+        return True
 
-    def is_connected(self):
-        pass
+    def is_active(self):
+        #any more checks to see if a peer is active?
+        return self.is_not_timed_out()
+
+
         
     
