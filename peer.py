@@ -58,13 +58,19 @@ class Peer:
         self.am_interested = False
         self.peer_choking = True
         self.peer_interested = False
+        
+        #to decide if we need to send a keepalive message, track when this peer last received one of our messages
+        self.last_contacted = None
+        #these are the pieces that have succesfully been downloaded
+        self.completed_pieces = []
+        #these are the pieces that are available to download
+        self.bitfield = None
 
     """
     Performs the handshake, if this returns False, the connection with the peer failed
     """
     def send_message(self, message):
         self.socket.send(message)
-
 
     def secret_handshake_successful(self):
         pstr = b"BitTorrent protocol"
@@ -94,44 +100,16 @@ class Peer:
         except Exception as e:
             print(f"could not handshake peer because of {e}")
 
-    # get a message from the socket, and parse it
-    # a message starts with a 4 byte length prefix
-    # followed by an id that corresponds to the type of message
-    # whatever is left of the message is part of the payload
+    # receive message from the remote peer
     def receive_message(self):
-        # first get the length prefix, which is a 4-byte big-endian value
-        socket_data = self.socket.recv(4)
-        length_prefix = int.from_bytes(socket_data, "big")
-        if length_prefix == 0:
-            return { "length_prefix": 0, "id": None, "payload": None}
-        # then receive exactly that many bytes
-        message = self.socket.recv(length_prefix)
-
-        #now we will have to do some mandatory error handling or end up confused for over a year checking all possible torrent
-        #resources and wonder wtf went wrong only to find out that http://www.kristenwidman.com/blog/71/how-to-write-a-bittorrent-client-part-2/ mentions that there is no guarantee that messages will come in discrete packets containing only a single entire message and implementation does not account for that and it fails and everything is horrible pls note this
-        incomplete_message = False
+        length_prefix = int.from_bytes(self.socket.recv(4), "big")
+        message_bytes = self.socket.recv(length_prefix)
         while  len(message) < length_prefix:
-            incomplete_message = True
-            remaining_bytes = length_prefix - len(message)
-            message += self.socket.recv(remaining_bytes)
+            remaining_bytes = length_prefix - len(message_bytes)
+            message_bytes += self.socket.recv(remaining_bytes)
 
-            #exit(f"Error, we did not receive as many bytes as requested!: {message}")
-        # then get the message id, a single decimal byte
-
-        if len(message) < 1:
-            exit(f"Error, cannot get payload of this message!")
-        message_id = message[0]
-
-        # the payload should be whatevers left in the response, can be nothing
-        message_payload = message[1:]
-
-
-        message = {
-            "length_prefix": length_prefix,
-            "id": message_id,
-            "payload": message_payload,
-        }
-        return message
+        return  Message.from_bytes(message_bytes)
+        
 
     def all_subpieces_received(self, piece_index):
         for part in range(16):
@@ -169,15 +147,13 @@ class Peer:
     
     #combines the subpieces into one piece, moves it to the "finished_pieces" folder
     def verify_piece(self, piece_index):
-        print(f"verifying")
-        #combine
         sub_pieces = []
         for part in range(16):
             try:
                 f = open(f'pieces/piece{piece_index}part{part}.part','rb')
                 sub_pieces.append(f.read())
-            #failure means piece incomplete, delete it
             except FileNotFoundError:
+                #should not happen, this should only be called if all subpieces are present
                 self.delete_piece(piece_index)
                 return
         
@@ -187,6 +163,7 @@ class Peer:
         #verify
         if self.mif.piece_hash_in_bytes(piece_index) == digest:
             self.move_piece(piece_index)
+            self.completed_pieces.append(piece_index)
         else:
             self.delete_piece(piece_index)
     
@@ -231,7 +208,7 @@ class Peer:
             self.send_message(have_message)
             #time.sleep(.01)
             
-    def handle_bitfield_message(self):
+    def handle_bitfield_message(self, message):
         print(f"received le bitfield")
     
     def handle_request_message(self):
@@ -246,7 +223,7 @@ class Peer:
             binary_file.write(block)
         if self.all_subpieces_received(piece_index):
             self.verify_piece(piece_index)
-            
+
     def handle_cancel_message(self):
          print("received cancel message")
     
@@ -254,55 +231,57 @@ class Peer:
         print("received port message")
         
     def handle_unknown_message(self, message):
-        print(f"received an unknown message")
+        exit("SOEMTHING WENT WRONG HANDLING AN UNKNOWN MESSAGE")
+    
+    def parse_message(self, message):
+        match message.message_type:
+            case MessageType.KEEPALIVE:
+                self.handle_keepalive_message()
+            case MessageType.CHOKE:
+                self.handle_choke_message()
+            case MessageType.UNCHOKE:
+                self.handle_unchoke_message()
+            case  MessageType.INTERESTED:
+                self.handle_interested_message()
+            case  MessageType.NOTINTERESTED:
+                self.handle_notinterested_message()
+            case  MessageType.HAVE:
+                self.handle_have_message(message)
+            case  MessageType.BITFIELD:
+                self.handle_bitfield_message(message)
+            case  MessageType.REQUEST:
+                self.handle_request_message()
+            case  MessageType.PIECE:
+                self.handle_piece_message(message)
+            case  MessageType.CANCEL:
+                self.handle_cancel_message()
+            case  MessageType.PORT:
+                self.handle_port_message(message)
+            case _:
+                self.handle_unknown_message(message)
         
-    def initiate_peer_wire_protocol(self):
-        try:
-            while True:
-                # continually parse messages
-                message = self.receive_message()
-                if message["length_prefix"] == 0:
-                    self.handle_keepalive_message()
-                    continue
-                match message["id"]:
-                    case 0:
-                        self.handle_choke_message()
-                    case 1:
-                        self.handle_unchoke_message()
-                    case 2:
-                        self.handle_interested_message()
-                    case 3:
-                        self.handle_notinterested_message()
-                    case 4:
-                        self.handle_have_message(message)
-                    case 5:
-                        self.handle_bitfield_message()
-                    case 6:
-                        self.handle_request_message()
-                    case 7:
-                        self.handle_piece_message(message)
-                    case 8:
-                        self.handle_cancel_message()
-                    case 9:
-                        self.handle_port_message(message)
-                    case _:
-                        self.handle_unknown_message(message)
+    def step(self):
+        #receive message
+        message = self.receive_message()
+        #parse_message
+        self.parse_message(message)
 
-        except KeyboardInterrupt:
-            print(f"Keyboardinterrupt received, quit listening")
-
-    #adds a piece_nr to the json file that stores all completed pieces
-    #can remove the piece and parts files, write the contents of the full piece to the output file
-    def set_piece_as_verified(self, piece_nr):
-        print(f"Completely downloaded piece {piece_nr}, writing it to output file now!")
+    #sends a keepalive if required
+    def maintain_connection(self):
+        print(f"maintain_connection not implemented yet")
 
     def connect(self):
         try:
             #should handle both ipv4 and ipv6
             self.socket = socket.create_connection((self.ip, self.port))
             if self.secret_handshake_successful():
-                self.initiate_peer_wire_protocol()
-            self.socket.close()
+                self.last_contacted = datetime.now()
+            return True
         except Exception as e:
-            print(f"Error conecting to peer: {e}")
+            return False
 
+
+    def is_connected(self):
+        pass
+        
+    
