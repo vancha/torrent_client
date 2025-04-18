@@ -38,10 +38,10 @@ client = TorrentClient()
 try:
     while True:
         client.step()
-        time.sleep(.1)
+        time.sleep(.01)
 except KeyboardInterrupt:
     print(f"caching the peers")
-    client.cache_peers()
+    client.clean_shutdown()
 
 
 

@@ -21,9 +21,10 @@ class TorrentClient:
     def calculate_remaining_bytes(self):
         pass
 
-    def cache_peers(self):
+    def clean_shutdown(self):
         self.peer_manager.cache_peers()
-    
+        self.piece_selector.cache_piece_data()
+
     #performs all the steps required for downloading a file
     def step(self):
         #check if we have enough peers
@@ -36,5 +37,6 @@ class TorrentClient:
         self.peer_manager.refresh_peers()
         
         #tell the peer_manager to tell the peers which pieces to request
-        self.piece_selector.get_available_pieces(self.peer_manager.get_peers())
-        self.piece_selector.request_piece_from_peers(self.peer_manager.get_peers())
+        self.piece_selector.step(self.peer_manager.get_peers(), self.metainfo_file)
+        #self.piece_selector.get_available_pieces(self.peer_manager.get_peers())
+        #self.piece_selector.request_piece_from_peers(self.peer_manager.get_peers())

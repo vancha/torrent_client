@@ -18,7 +18,6 @@ class Peer:
         - port, the port we need to connect to
         - mif, the metainfo file object that lets us get the info_hash
     """
-
     def __init__(self, client_id, ip, port, mif):
         self.client_id = client_id
         self.ip = ip
@@ -37,7 +36,7 @@ class Peer:
         #to decide if we need to send a keepalive message, track when this peer last received one of our messages
         self.last_contacted = None
         #these are the pieces that have succesfully been downloaded
-        self.completed_pieces = []
+        self.completed_pieces = set()
         #these are the pieces that are available to download
         self.bitfield = set()
 
@@ -58,13 +57,22 @@ class Peer:
             begin   = subpiece_index * SUBPIECE_SIZE
             length  = SUBPIECE_SIZE
             request_message = Message.create_request_message(piece_index, begin, length)
-            time.sleep(0.01)
+            time.sleep(0.1)
             self.send_message(request_message)
 
     #checks the bitfield to see which pieces are available and returns them
     def get_available_pieces(self):
         return list(self.bitfield)
-
+    
+    def remove_available_piece(self, piece_index):
+        self.bitfield.remove(piece_index)
+        
+    def get_completed_pieces(self):
+        return list(self.completed_pieces)
+        
+    def clear_completed_pieces(self):
+        self.completed_pieces = set()
+    
     def generate_handshake(self):
         return PSTRLEN + PSTR + RESERVED_BYTES + self.mif.get_info_hash_bytes() + self.client_id.encode("utf-8")
 
@@ -102,55 +110,9 @@ class Peer:
             except FileNotFoundError:
                 return False
         return True
-        
-    #deletes the piece from disk, it's bad >:(
-    def delete_piece(self, piece_index):
-        for part in range(16):
-            try:
-                file = f'pieces/piece{piece_index}part{part}.part'
-                os.remove(file)
-            except Exception as e:
-                print(f"failed deleting piece {e}")
-                #we don't care about exception, if a piece is missing we won't be able to find it
-                pass
-    
-    #takes all the parts, combines them, and moves them to the completed folder
-    def move_piece(self, piece_index):
-        sub_pieces = []
-        for part in range(16):
-            f = open(f'pieces/piece{piece_index}part{part}.part','rb')
-            sub_pieces.append(f.read())  
-        complete_piece = b''.join(sub_pieces)
-        with open(f"./completed_pieces/{piece_index}.piece", "wb") as binary_file:
-            # Write bytes to file
-            binary_file.write(complete_piece)
-        self.delete_piece(piece_index)
-        print(f"piece moved")
-    
-    
-    #combines the subpieces into one piece, moves it to the "finished_pieces" folder
-    def verify_piece(self, piece_index):
-        sub_pieces = []
-        for part in range(16):
-            try:
-                f = open(f'pieces/piece{piece_index}part{part}.part','rb')
-                sub_pieces.append(f.read())
-            except FileNotFoundError:
-                #should not happen, this should only be called if all subpieces are present
-                self.delete_piece(piece_index)
-                return
-        
-        complete_piece = b''.join(sub_pieces)
-        piece_hash = hashlib.sha1(complete_piece)
-        digest = piece_hash.digest()
-        #verify
-        if self.mif.piece_hash_in_bytes(piece_index) == digest:
-            self.move_piece(piece_index)
-            self.completed_pieces.append(piece_index)
-        else:
-            self.delete_piece(piece_index)
     
     def handle_keepalive_message(self):
+        #self.active = False
         print(f"received keepalive message")
         
     def handle_choke_message(self):
@@ -185,15 +147,13 @@ class Peer:
         print("received request message")
     
     def handle_piece_message(self, message):
-        print(f"AAAAAAAAAAAAAAAAA PPPIIIIEEEECCCEEEE!!!!!!")
-        #piece_index = struct.unpack('!I', message["payload"][0:4])[0]
         begin = struct.unpack('!I', message.get_payload()[4:8])[0]
         block = message.get_payload()[8:]
         part = begin // SUBPIECE_SIZE
         with open(f"./pieces/piece{message.get_piece_index()}part{part}.part", "wb") as binary_file:
             binary_file.write(block)
         if self.all_subpieces_received(message.get_piece_index()):
-            self.verify_piece(message.get_piece_index())
+            self.completed_pieces.add(message.get_piece_index())
 
     def handle_cancel_message(self):
          print("received cancel message")
@@ -207,7 +167,8 @@ class Peer:
     def parse_message(self, message):
         match message.get_type():
             case MessageType.KEEPALIVE:
-                self.handle_keepalive_message()
+                pass
+                #self.handle_keepalive_message()
             case MessageType.CHOKE:
                 self.handle_choke_message()
             case MessageType.UNCHOKE:
@@ -232,13 +193,16 @@ class Peer:
                 self.handle_unknown_message(message)
         
     def step(self):
-        message = self.receive_message()
-        self.parse_message(message)
-
+        try:
+            message = self.receive_message()
+            self.parse_message(message)
+        except TimeoutError:
+            pass
+            
     def connect(self):
         try:
             self.socket = socket.create_connection((self.ip, self.port))
-            #self.socket.set_blocking(0)
+            self.socket.settimeout(.1)
             if self.secret_handshake_successful():
                 self.active = True
                 print(f"shook hands with peer")
@@ -247,7 +211,6 @@ class Peer:
             return False
         except Exception as e:
             return False
-
 
     def is_active(self):
         return self.active

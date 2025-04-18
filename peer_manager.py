@@ -40,7 +40,5 @@ class PeerManager:
     #the meat and perderders, gets called periodically to ensure a valid state of peers
     def refresh_peers(self):
         self.clean_up_peers()
-        print(f"peers after cleanup: {len(self.peers)}")
         for peer in self.peers:
-            #lets the peers send and receive messages
             peer.step()
