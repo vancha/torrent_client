@@ -1,4 +1,6 @@
 from constants import MessageType, MESSAGES_WITHOUT_ID, MESSAGES_WITHOUT_PAYLOAD
+import struct 
+
 
 class Message:
     '''
@@ -18,6 +20,7 @@ class Message:
     #converts the message to bytes for sending over network
     def to_bytes(self):
         length_prefix   = self.length_prefix.to_bytes(4, byteorder='big')
+        
         if not self.has_id():
             return length_prefix
 
@@ -36,18 +39,17 @@ class Message:
             return MessageType(self.message_id)
 
     def has_payload(self):
-        return MessageType(self.message_id) in MESSAGES_WITHOUT_PAYLOAD
+        return MessageType(self.message_id) not in MESSAGES_WITHOUT_PAYLOAD
 
     def get_payload(self):
-        print(f"requesting payload of message of type {MessageType(self.message_id)}")
         return self.message_payload
 
     def has_id(self):
-        return MessageType(self.message_id) in MESSAGES_WITHOUT_ID
+        return MessageType(self.message_id) not in MESSAGES_WITHOUT_ID
 
-    #will only return something if message is a have message
+    #will only return something if message is a have,request or piece message
     def get_piece_index(self):
-        return None
+        return struct.unpack('!I', self.get_payload()[0:4])[0]
 
     #Turns raw network bytes in to a message
     @staticmethod
@@ -63,8 +65,6 @@ class Message:
             return Message(length_prefix, message_id)
 
         payload  = raw_bytes[5:]
-        if message_id == 4:
-            print(f"created have message with payload: {payload}")
         return Message(length_prefix, message_id, payload)
 
     # convenience functions follow
@@ -94,6 +94,6 @@ class Message:
         index = index.to_bytes(4, byteorder='big')
         begin = begin.to_bytes(4, byteorder='big')
         length = length.to_bytes(4, byteorder='big')
-        payload = index+begin+length
-
+        payload = index + begin + length
         return Message(13, 6, payload)
+   
