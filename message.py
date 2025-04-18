@@ -1,3 +1,5 @@
+from constants import MessageType, MESSAGES_WITHOUT_ID, MESSAGES_WITHOUT_PAYLOAD
+
 class Message:
     '''
         Creates a new message
@@ -5,7 +7,7 @@ class Message:
         This message can be generated from raw bytes, and turned in to one, for sending and receiving over the network
 
     '''
-    def __init__(self, length_prefix, message_id=None, message_payload=None):
+    def __init__(self, length_prefix, message_id=-1, message_payload=None):
         self.length_prefix = length_prefix
 
         #if no prefix, then message is a keepalive message
@@ -31,23 +33,24 @@ class Message:
         if not self.length_prefix:
             return MessageType(-1)
         else:
-            return MessageType(self.message_type)
+            return MessageType(self.message_id)
 
     def has_payload(self):
-        return self.message_type in MESSAGES_WITHOUT_PAYLOAD
+        return MessageType(self.message_id) in MESSAGES_WITHOUT_PAYLOAD
 
     def get_payload(self):
-        return self.payload
+        print(f"requesting payload of message of type {MessageType(self.message_id)}")
+        return self.message_payload
 
     def has_id(self):
-        return self.message_type in MESSAGES_WITHOUT_ID
+        return MessageType(self.message_id) in MESSAGES_WITHOUT_ID
 
     #will only return something if message is a have message
     def get_piece_index(self):
         return None
 
     #Turns raw network bytes in to a message
-    @classmethod
+    @staticmethod
     def from_bytes( raw_bytes ):
         # first get the length prefix, which is a 4-byte big-endian value
         length_prefix = int.from_bytes(raw_bytes[0:4], "big")
@@ -55,34 +58,42 @@ class Message:
         if length_prefix == 0:
             return Message.create_keepalive_message()
 
-        message_id      = raw_bytes[4]
+        message_id = raw_bytes[4]
         if length_prefix == 1:
             return Message(length_prefix, message_id)
 
-        payload         = raw_bytes[5:]
+        payload  = raw_bytes[5:]
+        if message_id == 4:
+            print(f"created have message with payload: {payload}")
         return Message(length_prefix, message_id, payload)
-
-
 
     # convenience functions follow
 
-    @classmethod
+    @staticmethod
     def create_keepalive_message():
-        return Message(0)
+        return Message(0,-1)
 
-    @classmethod
+    @staticmethod
     def create_choke_message():
         return Message(1,0)
 
-    @classmethod
+    @staticmethod
     def create_unchoke_message():
         return Message(1,1)
 
-    @classmethod
+    @staticmethod
     def create_interested_message():
         return Message(1,2)
 
-    @classmethod
+    @staticmethod
     def create_notinterested_message():
         return Message(1,3)
     
+    @staticmethod
+    def create_request_message(index, begin, length):
+        index = index.to_bytes(4, byteorder='big')
+        begin = begin.to_bytes(4, byteorder='big')
+        length = length.to_bytes(4, byteorder='big')
+        payload = index+begin+length
+
+        return Message(13, 6, payload)

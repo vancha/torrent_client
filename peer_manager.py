@@ -4,24 +4,32 @@ class PeerManager:
     #initialize the peermanager with a bunch of (cached) peers
     def __init__(self):
         self.peers = []
-        #with open('cached_peers.pkl', 'rb') as f:
-        #    print(f"pickle: {pickle.load(f)}")
-
-    def __del__(self):
-        #with open('cached_peers.pkl', 'wb') as f:
-        #    pickle.dump(self.peers, f)
-        pass
+        peers = self.load_peers()
+        self.add_peers(peers)
 
     def add_peers(self, peers):
         for peer in peers:
             try:
                 if peer.connect():
-                    print(f"peer connected")
                     self.peers.append(peer)
             except Exception:
                 pass
                 
-    
+    def cache_peers(self):
+        #remove the unhashable socket connections
+        for peer in self.peers:
+            del peer.socket
+        #pickle the peers
+        with open('cached_peers.pkl', 'wb') as f:
+            pickle.dump(self.peers, f)
+
+    def load_peers(self):
+        try:
+            with open('cached_peers.pkl', 'rb') as f:
+                return pickle.load(f)
+        except Exception:
+            return []
+
     def get_peers(self):
         return self.peers
     

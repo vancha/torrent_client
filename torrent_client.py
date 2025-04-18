@@ -20,11 +20,14 @@ class TorrentClient:
         
     def calculate_remaining_bytes(self):
         pass
+
+    def cache_peers(self):
+        self.peer_manager.cache_peers()
     
     #performs all the steps required for downloading a file
     def step(self):
         #check if we have enough peers
-        if len(self.peer_manager.peers) < MIN_PEERS:
+        if len(self.peer_manager.get_peers()) < MIN_PEERS:
             print(f"requesting new peers because {len(self.peer_manager.peers)} < {MIN_PEERS}")
             new_peers = self.tracker_client.get_peers()
             self.peer_manager.add_peers(new_peers)

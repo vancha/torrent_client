@@ -35,9 +35,14 @@ from urllib.parse import quote
 #    )
 #)
 client = TorrentClient()
-while True:
-    client.step()
-    time.sleep(.01)
+try:
+    while True:
+        client.step()
+        time.sleep(.1)
+except KeyboardInterrupt:
+    print(f"caching the peers")
+    client.cache_peers()
+
 
 
 # connect to them
