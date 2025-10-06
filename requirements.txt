@@ -1,0 +1,3 @@
+more_itertools
+bencode_decoder @ git+https://github.com/vancha/bencode_decoder
+bencodepy
